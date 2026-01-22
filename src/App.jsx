@@ -404,6 +404,12 @@ export default function RoomSelector() {
                   <li>Enter your email and submit <strong><b>either for yourself or for both parties</b></strong> in your couple at the same time</li>
                   <li>After data collation, rooms will be assigned based on the data provided</li>
                   <li>Ties are settled randomly, and you'll automatically enter selection for next room in your preferences list</li>
+                  <li>
+                    <strong><b>Rank up to 4 beds you’d be happy with</b></strong>
+                    <span className="block text-xs text-gray-500 mt-1">
+                      (Only rank beds you’d actually be comfortable getting — unranked beds are treated as neutral, not bad)
+                    </span>
+                  </li>
                 </ol>
               </div>
             </div>
