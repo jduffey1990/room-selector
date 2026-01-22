@@ -91,6 +91,11 @@ export default function RoomSelector() {
   };
 
   const handleSubmit = async (submissionType = 'single') => {
+    if (!isBalanced) {
+    alert('Room prices must balance to $0 before submitting.');
+    return;
+  }
+
     if (!email.trim()) {
       alert('Please enter your email');
       return;
@@ -564,23 +569,30 @@ export default function RoomSelector() {
             )}
 
             <div className="flex flex-col gap-4">
+              {!isBalanced && (
+                <p className="text-sm text-red-600 text-center">
+                  Prices must balance to <strong>$0</strong> before submitting.
+                </p>
+              )}
               {/* Button row */}
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => handleSubmit('single')}
-                  disabled={!email.trim() || preferences.length === 0}
-                  className="bg-indigo-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                  disabled={!isBalanced || !email.trim() || preferences.length === 0}
+                  className="bg-indigo-600 text-white py-3 px-6 rounded-lg font-semibold
+                            hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
                 >
                   Submit Preferences (1 Person)
                 </button>
 
                 <button
                   onClick={() => handleSubmit('double')}
-                  disabled={!email.trim() || preferences.length === 0}
-                  className="bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                  disabled={!isBalanced || !email.trim() || preferences.length === 0}
+                  className="bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold
+                            hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
                 >
                   Submit Preferences (2 People)
-                </button>
+                </button>`
               </div>
 
               {/* Disclaimer */}
