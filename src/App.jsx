@@ -387,27 +387,58 @@ export default function RoomSelector() {
       <div className="max-w-4xl mx-auto mt-16">
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-6">
           <div className="flex justify-between items-start mb-6">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-                Room Selection & Pricing
-              </h1>
-              <p className="text-gray-600">
-                Adjust room prices (per person) and select your preferences
-              </p>
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-bold text-gray-800">
+                    Room Selection & Pricing
+                  </h1>
+                  <p className="text-gray-600 mt-1">
+                    Adjust room prices (per person) and select your preferences
+                  </p>
+                </div>
+
+                <a
+                  href="https://docs.google.com/document/d/19QelDAaXHoVrwLfxi9_4eflE6LdWPvi_b-qUcrGewLo/edit?usp=sharing"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-700 font-semibold hover:text-blue-900 transition"
+                >
+                  More info
+                  <span aria-hidden>→</span>
+                </a>
+              </div>
+
+              {/* Info Card */}
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-3">How It Works</h3>
+                <h3 className="text-lg font-bold text-gray-800 mb-3">
+                  How It Works
+                </h3>
+
                 <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
-                  <li>Everyone starts at $480/person base cost</li>
-                  <li>Use the up/down arrows to adjust room prices (changes by $25/person per click)</li>
-                  <li>Total adjustments must balance to zero before submission</li>
-                  <li>Click "Select" to choose your preferred rooms (in order of preference)</li>
-                  <li><strong><b>Submit as a couple if you want to actually sleep together</b></strong> lol</li>
-                  <li>After data collation, rooms will be assigned based on the data provided</li>
-                  <li>Ties are settled randomly, and you'll automatically enter selection for next room in your preferences list</li>
+                  <li>Everyone starts at <strong>$480/person</strong> base cost</li>
                   <li>
-                    <strong><b>Rank up to 4 beds you’d be happy with</b></strong>
+                    Use the up/down arrows to adjust room prices
+                    <span className="block text-xs text-gray-500">
+                      ($25/person per click)
+                    </span>
+                  </li>
+                  <li>Total adjustments must balance to zero before submission</li>
+                  <li>Click “Select” to rank rooms in order of preference</li>
+                  <li>
+                    <strong>Submit as a couple if you want to actually sleep together</strong>{" "}
+                    <span className="text-gray-500">(yes, really)</span>
+                  </li>
+                  <li>Rooms are assigned after data collation</li>
+                  <li>
+                    Ties are settled randomly, then you roll into your next preference
+                  </li>
+                  <li>
+                    <strong>Rank up to 4 beds you’d be happy with</strong>
                     <span className="block text-xs text-gray-500 mt-1">
-                      (Only rank beds you’d actually be comfortable getting — unranked beds are treated as neutral, not bad)
+                      Only rank beds you’d actually be comfortable getting — unranked beds
+                      are treated as neutral, not bad.
                     </span>
                   </li>
                 </ol>
