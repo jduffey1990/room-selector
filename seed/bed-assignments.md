@@ -1,0 +1,17 @@
+
+# 🛏️ Democratic Bed Assignments
+
+| Person | Bed | Utility |
+|-------|-----|---------|
+| alice.johnson@gmail.com | bedroom1 | 402.50 |
+| diana.martinez@gmail.com | bedroom3 | 352.50 |
+| fiona.green@icloud.com | bedroom4 | 332.50 |
+| alice.johnson+copy@gmail.com | bedroom2 | 281.25 |
+| george.wilson@gmail.com | bedroom5a | 50.00 |
+| ethan.lee@proton.me | bedroom5d | 20.00 |
+| george.wilson+copy@gmail.com | bedroom5b | 20.00 |
+| hannah.davis@gmail.com | bedroom5e | 20.00 |
+| julia.anderson@pm.me | bedroom5f | -10.00 |
+| ian.taylor@fastmail.com | bedroom5c | -40.00 |
+| jluke11@gmail.com | floor2 | -170.00 |
+| bob.smith@yahoo.com | floor1 | -200.00 |

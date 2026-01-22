@@ -1,0 +1,13 @@
+{
+  "name": "firebase-seed-script",
+  "version": "1.0.0",
+  "description": "Seed Firebase with test room selection data",
+  "main": "seed-firebase.js",
+  "scripts": {
+    "seed": "node seed-firebase.js",
+    "cleanup": "node cleanup.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}
