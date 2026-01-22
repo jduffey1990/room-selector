@@ -401,7 +401,7 @@ export default function RoomSelector() {
                   <li>Use the up/down arrows to adjust room prices (changes by $25/person per click)</li>
                   <li>Total adjustments must balance to zero before submission</li>
                   <li>Click "Select" to choose your preferred rooms (in order of preference)</li>
-                  <li>Enter your email and submit <strong><b>either for yourself or for both parties</b></strong> in your couple at the same time</li>
+                  <li><strong><b>Submit as a couple if you want to actually sleep together</b></strong> lol</li>
                   <li>After data collation, rooms will be assigned based on the data provided</li>
                   <li>Ties are settled randomly, and you'll automatically enter selection for next room in your preferences list</li>
                   <li>
