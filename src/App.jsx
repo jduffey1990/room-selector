@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronUp, ChevronDown, DollarSign, CheckCircle2, BarChart3 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, getFirestore, query, where } from 'firebase/firestore';
+import { BarChart3, CheckCircle2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 // Firebase configuration - REPLACE WITH YOUR OWN CONFIG
 const firebaseConfig = {
@@ -39,6 +39,7 @@ export default function RoomSelector() {
   const [email, setEmail] = useState('');
   const [preferences, setPreferences] = useState([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionType, setSubmissionType] = useState('single');
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [adminKey, setAdminKey] = useState('');
@@ -89,7 +90,7 @@ export default function RoomSelector() {
     );
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (submissionType = 'single') => {
     if (!email.trim()) {
       alert('Please enter your email');
       return;
@@ -100,10 +101,20 @@ export default function RoomSelector() {
       return;
     }
 
-    // Check for duplicate email
+    const emailLower = email.trim().toLowerCase();
+    const emailBase = email.trim();
+    const emailParts = emailBase.split('@');
+    const copyEmail = submissionType === 'double' 
+      ? `${emailParts[0]}+copy@${emailParts[1]}`
+      : null;
+    const copyEmailLower = copyEmail ? copyEmail.toLowerCase() : null;
+
+    // Check for duplicate emails
     try {
-      const emailLower = email.trim().toLowerCase();
-      const q = query(collection(db, 'submissions'), where('emailLower', '==', emailLower));
+      const q = query(
+        collection(db, 'submissions'), 
+        where('emailLower', 'in', copyEmailLower ? [emailLower, copyEmailLower] : [emailLower])
+      );
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
@@ -114,17 +125,25 @@ export default function RoomSelector() {
       console.error('Error checking for duplicates:', error);
     }
 
-    const submission = {
-      email: email.trim(),
-      emailLower: email.trim().toLowerCase(),
+    const createSubmission = (emailToUse) => ({
+      email: emailToUse,
+      emailLower: emailToUse.toLowerCase(),
       timestamp: new Date().toISOString(),
       roomPrices: rooms.map(r => ({ id: r.id, name: r.name, price: r.basePrice })),
       preferences: preferences,
       totalAdjustment
-    };
+    });
 
     try {
-      await addDoc(collection(db, 'submissions'), submission);
+      // Submit first record
+      await addDoc(collection(db, 'submissions'), createSubmission(emailBase));
+      
+      // Submit second record if double
+      if (submissionType === 'double' && copyEmail) {
+        await addDoc(collection(db, 'submissions'), createSubmission(copyEmail));
+      }
+      
+      setSubmissionType(submissionType);
       setSubmitted(true);
     } catch (error) {
       console.error('Error saving submission:', error);
@@ -137,6 +156,7 @@ export default function RoomSelector() {
     setEmail('');
     setPreferences([]);
     setSubmitted(false);
+    setSubmissionType('single');
   };
 
   const exportToJSON = () => {
@@ -190,7 +210,8 @@ export default function RoomSelector() {
           <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h2 className="text-3xl font-bold text-gray-800 mb-4">Submission Received!</h2>
           <p className="text-gray-600 mb-6">
-            Thanks for submitting your preferences. We'll sort out the room assignments after January 29th.
+            Thanks for submitting preferences for <strong>{submissionType === 'double' ? '2 people' : '1 person'}</strong>. 
+            We'll sort out the room assignments after January 29th.
           </p>
           <button
             onClick={resetForm}
@@ -244,7 +265,7 @@ export default function RoomSelector() {
                         onChange={(e) => setAdminKey(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && checkAdminKey()}
                         placeholder="Enter admin key"
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-purple-500"
                       />
                       <button
                         onClick={checkAdminKey}
@@ -373,9 +394,18 @@ export default function RoomSelector() {
               <p className="text-gray-600">
                 Adjust room prices (per person) and select your preferences
               </p>
-              <p className="text-sm text-indigo-600 font-medium mt-1">
-                Base cost: $480/person • Prices shown are adjustments from base
-              </p>
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-3">How It Works</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
+                  <li>Everyone starts at $480/person base cost</li>
+                  <li>Use the up/down arrows to adjust room prices (changes by $25/person per click)</li>
+                  <li>Total adjustments must balance to zero before submission</li>
+                  <li>Click "Select" to choose your preferred rooms (in order of preference)</li>
+                  <li>Enter your email and submit <strong><b>either for yourself or for both parties</b></strong> in your couple at the same time</li>
+                  <li>After data collation, rooms will be assigned based on the data provided</li>
+                  <li>Ties are settled randomly, and you'll automatically enter selection for next room in your preferences list</li>
+                </ol>
+              </div>
             </div>
             <button
               onClick={() => setView('admin')}
@@ -475,8 +505,9 @@ export default function RoomSelector() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your.email@example.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
+
             </div>
             
             {preferences.length > 0 && (
@@ -495,28 +526,37 @@ export default function RoomSelector() {
               </div>
             )}
 
-            <button
-              onClick={handleSubmit}
-              disabled={!email.trim() || preferences.length === 0}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-            >
-              Submit Preferences
-            </button>
+            <div className="flex flex-col gap-4">
+              {/* Button row */}
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => handleSubmit('single')}
+                  disabled={!email.trim() || preferences.length === 0}
+                  className="bg-indigo-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                >
+                  Submit Preferences (1 Person)
+                </button>
+
+                <button
+                  onClick={() => handleSubmit('double')}
+                  disabled={!email.trim() || preferences.length === 0}
+                  className="bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                >
+                  Submit Preferences (2 People)
+                </button>
+              </div>
+
+              {/* Disclaimer */}
+              {email.trim() && email.includes('@') && (
+                <p className="text-xs text-gray-500 text-center">
+                  Submitting for 2 people will create entries for "{email.trim()}" and "{email.trim().split('@')[0]}+copy@{email.trim().split('@')[1]}"
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-3">How It Works</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600">
-            <li>Everyone starts at $480/person base cost</li>
-            <li>Use the up/down arrows to adjust room prices (changes by $25/person per click)</li>
-            <li>Total adjustments must balance to zero before submission</li>
-            <li>Click "Select" to choose your preferred rooms (in order of preference)</li>
-            <li>Enter your email and submit</li>
-            <li>After January 29th, rooms will be assigned starting with the most expensive</li>
-            <li>Ties are settled randomly, and you'll automatically enter selection for next room</li>
-          </ol>
-        </div>
+        
       </div>
     </div>
   );
