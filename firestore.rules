@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // SECURITY MODEL (v2 — public multi-tenant)
+    //
+    // There are no user accounts. Access is gated by unguessable codes that an
+    // organizer shares out of band. Firestore rules cannot filter *fields* on a
+    // read, so anything secret must live in a document clients can never read.
+    //
+    //   trips/{id}                  public: name, baseCostPerPerson, status
+    //   trips/{id}/secret/codes     adminCode + participantCode — NO client access
+    //   rooms/{id}                  public: nothing sensitive
+    //   submissions/{id}            emails + bids — NO client access
+    //   assignments/{id}            emails — NO client access
+    //
+    // Every write, and every read of participant data, goes through a callable
+    // Cloud Function that verifies the caller's code with the Admin SDK (which
+    // bypasses these rules). Clients get read-only access to the two public
+    // collections and nothing else.
+    //
+    // Consequence to keep in mind when editing: a client must NEVER be able to
+    // read a document containing adminCode, participantCode, or an email.
+
+    // Public trip metadata. Safe to read: contains no codes and no emails.
+    // Written only by the createTrip function.
+    match /trips/{tripId} {
+      allow read: if true;
+      allow write: if false;
+
+      // Codes live here so that the parent doc can stay publicly readable.
+      match /secret/{doc} {
+        allow read, write: if false;
+      }
+    }
+
+    // Room definitions for a trip. Public so the submission form can render
+    // before anyone has entered a code. Written only by createTrip.
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Reverse lookup: doc ID is the participant code, value is its tripId. Kept
+    // as a keyed document rather than a query so joinTrip is a single O(1) get
+    // with no index, and so codes are never present in a queryable field.
+    match /codes/{code} {
+      allow read, write: if false;
+    }
+
+    // Contains participant emails and bids. Reachable only via getAdminData,
+    // which requires the trip's adminCode. Created only via submitPreferences,
+    // which enforces the zero-sum price rule server-side (the client-side check
+    // is a convenience, not a control).
+    match /submissions/{submissionId} {
+      allow read, write: if false;
+    }
+
+    // Allocation output: who sleeps where and what they pay. Contains emails.
+    // Written only by allocateRooms; read only via getResults.
+    match /assignments/{assignmentId} {
+      allow read, write: if false;
+    }
+
+    // Anything not matched above is denied by default. Keep it that way — add
+    // an explicit block rather than loosening one of the rules above.
+  }
+}
