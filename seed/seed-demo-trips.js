@@ -86,10 +86,12 @@ async function clean() {
   for (const trip of demo) {
     const rooms = await db.collection("rooms").where("tripId", "==", trip.id).get();
     const subs = await db.collection("submissions").where("tripId", "==", trip.id).get();
+    const assigns = await db.collection("assignments").where("tripId", "==", trip.id).get();
     const secrets = await trip.ref.collection("secret").get();
     const batch = db.batch();
     rooms.docs.forEach((d) => batch.delete(d.ref));
     subs.docs.forEach((d) => batch.delete(d.ref));
+    assigns.docs.forEach((d) => batch.delete(d.ref));
     for (const sec of secrets.docs) {
       const pc = sec.data().participantCode;
       if (pc) batch.delete(db.collection("codes").doc(pc));
@@ -97,7 +99,8 @@ async function clean() {
     }
     batch.delete(trip.ref);
     await batch.commit();
-    console.log(`removed ${trip.data().name} (${rooms.size} rooms, ${subs.size} submissions)`);
+    console.log(`removed ${trip.data().name} (${rooms.size} rooms, ` +
+        `${subs.size} submissions, ${assigns.size} assignments)`);
   }
 }
 
