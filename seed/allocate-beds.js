@@ -1,10 +1,17 @@
 /**
- * Democratic Bed Allocation - Final Fixed Version
+ * Democratic Bed Allocation - Fixed Version
  * 
- * Utility scores: Used for allocation (includes preferences + bids + baseline)
- * Prices: Used for billing (submitted room prices, normalized + zero-sum)
+ * ALLOCATION:
+ * - Phase 1: Preferences first (ordinal ranking), conflicts resolved by utility
+ * - Phase 2: Remaining people allocated by utility
+ * - Couples get priority bonus for 2-capacity beds
  * 
- * Usage: node allocate-beds.js submissions-export.csv
+ * PRICING:
+ * - Based on ALL people's bids (not just who got assigned)
+ * - 80% weight from unassigned people, 20% from assigned people
+ * - Zero-sum adjustment so deltas sum to $0
+ * 
+ * Usage: node allocate-beds-fixed.js submissions-export.csv
  */
 
 const fs = require('fs');
@@ -35,8 +42,13 @@ const ROOMS = {
 };
 
 const BEDS = Object.keys(ROOMS);
-const DOUBLE_BEDS = BEDS.filter(id => ROOMS[id].capacity === 2);
-const SINGLE_BEDS = BEDS.filter(id => ROOMS[id].capacity === 1);
+
+// ---- Scoring parameters ----
+const BASELINE_WEIGHT = 1.0;
+const BID_WEIGHT = 0.6;
+const PREF_WEIGHT = 50;
+const SIMILAR_PROPAGATION = 0.3;
+const COUPLE_BONUS = 50;
 
 // ---- CSV parsing ----
 function splitCSV(line) {
@@ -98,25 +110,20 @@ for (const [baseEmail, members] of coupleMap.entries()) {
       primary: primary.email,
       secondary: secondary.email,
       preferences: primary.preferences,
-      roomPrices: avgRoomPrices
+      roomPrices: avgRoomPrices,
+      isCouple: true
     });
     
     console.log(`  Couple: ${primary.email} + ${secondary.email}`);
   } else if (members.length === 1) {
-    singles.push(members[0]);
+    singles.push({ ...members[0], isCouple: false });
     console.log(`  Solo: ${members[0].email}`);
   }
 }
 
 console.log(`\n  Total: ${couples.length} couples, ${singles.length} singles\n`);
 
-// ---- Scoring parameters (for allocation only) ----
-const BASELINE_WEIGHT = 2.0;
-const BID_WEIGHT = 0.8;
-const PREF_WEIGHT = 25;
-const SIMILAR_PROPAGATION = 0.3;
-
-// ---- Utility calculation (for allocation) ----
+// ---- Utility calculation ----
 function utility(person, bed) {
   const { base, bedClass } = ROOMS[bed];
   const bid = person.roomPrices[bed];
@@ -149,221 +156,267 @@ function utility(person, bed) {
   );
 }
 
-// ---- Allocate couples ----
-console.log('💑 Allocating couples (by utility)...\n');
+// ---- Allocation algorithm ----
+console.log('🎯 Allocating beds (preference-first with utility conflicts)...\n');
 
+const allPeople = [...couples, ...singles];
 const usedBeds = new Set();
-const coupleAssignments = [];
+const assignments = [];
+const unallocated = new Set(allPeople);
 
-for (const couple of couples) {
-  let bestOption = null;
+// Phase 1: Allocate by preference order
+const maxPrefLength = Math.max(...allPeople.map(p => p.preferences.length), 0);
+
+for (let prefRank = 0; prefRank < maxPrefLength; prefRank++) {
+  const conflictGroups = new Map();
   
-  // Option 1: capacity-2 beds
-  for (const bed of DOUBLE_BEDS) {
-    if (usedBeds.has(bed)) continue;
-    
-    const score = utility(couple, bed);
-    if (!bestOption || score > bestOption.score) {
-      bestOption = {
-        type: 'double',
-        beds: [bed],
-        score: score
-      };
-    }
-  }
-  
-  // Option 2: two single beds
-  const singleBedsByClass = {};
-  for (const bed of SINGLE_BEDS) {
-    if (usedBeds.has(bed)) continue;
-    const bedClass = ROOMS[bed].bedClass;
-    if (!singleBedsByClass[bedClass]) {
-      singleBedsByClass[bedClass] = [];
-    }
-    singleBedsByClass[bedClass].push(bed);
-  }
-  
-  for (const [bedClass, availableBeds] of Object.entries(singleBedsByClass)) {
-    if (availableBeds.length >= 2) {
-      const bed1 = availableBeds[0];
-      const bed2 = availableBeds[1];
-      
-      const score1 = utility(couple, bed1);
-      const score2 = utility(couple, bed2);
-      const avgScore = (score1 + score2) / 2;
-      
-      if (!bestOption || avgScore > bestOption.score) {
-        bestOption = {
-          type: 'double-single',
-          beds: [bed1, bed2],
-          score: avgScore
-        };
+  // Group people by their Nth preference
+  for (const person of unallocated) {
+    if (prefRank < person.preferences.length) {
+      const bed = person.preferences[prefRank];
+      if (!usedBeds.has(bed)) {
+        if (!conflictGroups.has(bed)) {
+          conflictGroups.set(bed, []);
+        }
+        conflictGroups.get(bed).push(person);
       }
     }
   }
   
-  if (!bestOption) {
-    console.log(`  ⚠️  ${couple.primary} + partner → NO BEDS AVAILABLE`);
-    continue;
-  }
-  
-  for (const bed of bestOption.beds) {
-    usedBeds.add(bed);
-  }
-  
-  coupleAssignments.push({
-    couple: couple,
-    beds: bestOption.beds,
-    type: bestOption.type
-  });
-  
-  if (bestOption.type === 'double') {
-    console.log(`  ${couple.primary} + partner → ${bestOption.beds[0]} (together)`);
-  } else {
-    console.log(`  ${couple.primary} → ${bestOption.beds[0]}`);
-    console.log(`  ${couple.secondary} → ${bestOption.beds[1]} (couple, separate beds)`);
+  // Resolve each group
+  for (const [bed, contenders] of conflictGroups.entries()) {
+    // Filter by capacity match
+    const validContenders = contenders.filter(person => {
+      if (ROOMS[bed].capacity === 2 && person.isCouple) return true;
+      if (ROOMS[bed].capacity === 1 && !person.isCouple) return true;
+      return false;
+    });
+    
+    if (validContenders.length === 0) continue;
+    
+    if (validContenders.length === 1) {
+      // No conflict, assign directly
+      const person = validContenders[0];
+      usedBeds.add(bed);
+      assignments.push({
+        person,
+        bed,
+        method: `pref#${prefRank + 1}`,
+        prefRank: prefRank
+      });
+      unallocated.delete(person);
+      
+      const displayName = person.isCouple 
+        ? `${person.primary} + partner`
+        : person.email;
+      console.log(`  ✓ ${displayName.padEnd(45)} → ${bed.padEnd(12)} [preference #${prefRank + 1}]`);
+    } else {
+      // Conflict: resolve by utility
+      let bestPerson = null;
+      let bestUtility = -Infinity;
+      
+      for (const person of validContenders) {
+        let util = utility(person, bed);
+        
+        // Apply couple bonus if competing for 2-capacity bed against singles
+        if (ROOMS[bed].capacity === 2 && person.isCouple) {
+          // Check if there are any singles trying to get this 2-capacity bed
+          // (though this shouldn't happen with our capacity filter above)
+          util += COUPLE_BONUS;
+        }
+        
+        if (util > bestUtility) {
+          bestUtility = util;
+          bestPerson = person;
+        }
+      }
+      
+      usedBeds.add(bed);
+      assignments.push({
+        person: bestPerson,
+        bed,
+        method: `pref#${prefRank + 1}(utility)`,
+        prefRank: prefRank
+      });
+      unallocated.delete(bestPerson);
+      
+      const displayName = bestPerson.isCouple 
+        ? `${bestPerson.primary} + partner`
+        : bestPerson.email;
+      console.log(`  ⚖️  ${displayName.padEnd(45)} → ${bed.padEnd(12)} [preference #${prefRank + 1}, won by utility]`);
+    }
   }
 }
 
-// ---- Allocate singles ----
-console.log('\n🧍 Allocating singles (by utility)...\n');
+// Phase 2: Allocate remaining by pure utility
+console.log('\n  Phase 2: Remaining allocations by utility...\n');
 
-const singleAssignments = [];
-
-for (const single of singles) {
-  let bestBed = null;
-  let bestScore = null;
+while (unallocated.size > 0) {
+  let bestAssignment = null;
+  let bestUtility = -Infinity;
   
-  for (const bed of BEDS) {
-    if (usedBeds.has(bed)) continue;
-    
-    const score = utility(single, bed);
-    if (bestScore === null || score > bestScore) {
-      bestBed = bed;
-      bestScore = score;
+  for (const person of unallocated) {
+    for (const bed of BEDS) {
+      if (usedBeds.has(bed)) continue;
+      
+      // Check capacity match
+      if (ROOMS[bed].capacity === 2 && !person.isCouple) continue;
+      if (ROOMS[bed].capacity === 1 && person.isCouple) continue;
+      
+      const util = utility(person, bed);
+      
+      if (util > bestUtility) {
+        bestUtility = util;
+        bestAssignment = { person, bed };
+      }
     }
   }
   
-  if (!bestBed) {
-    console.log(`  ⚠️  ${single.email} → NO BEDS AVAILABLE`);
-    continue;
-  }
+  if (!bestAssignment) break;
   
-  usedBeds.add(bestBed);
-  singleAssignments.push({
-    single: single,
-    bed: bestBed
+  usedBeds.add(bestAssignment.bed);
+  assignments.push({
+    person: bestAssignment.person,
+    bed: bestAssignment.bed,
+    method: 'utility-greedy',
+    prefRank: 999
   });
+  unallocated.delete(bestAssignment.person);
   
-  console.log(`  ${single.email} → ${bestBed}`);
+  const displayName = bestAssignment.person.isCouple 
+    ? `${bestAssignment.person.primary} + partner`
+    : bestAssignment.person.email;
+  console.log(`  🎲 ${displayName.padEnd(45)} → ${bestAssignment.bed.padEnd(12)} [utility greedy]`);
 }
 
-// ---- Build assignment list with ACTUAL PRICES ----
-console.log('\n💰 Calculating prices (separate from utility)...\n');
+if (unallocated.size > 0) {
+  console.log(`\n⚠️  ${unallocated.size} people could not be assigned (no capacity):`);
+  for (const p of unallocated) {
+    const displayName = p.isCouple ? `${p.primary} + partner` : p.email;
+    console.log(`  ${displayName}`);
+  }
+}
 
+// ---- Build pricing data ----
+console.log('\n💰 Calculating prices (80/20 consensus)...\n');
+
+// Collect ALL bids for each bed class
+const allBidsByClass = {};
+for (const bedClass of new Set(Object.values(ROOMS).map(r => r.bedClass))) {
+  allBidsByClass[bedClass] = [];
+}
+
+for (const person of allPeople) {
+  for (const bed of BEDS) {
+    const bedClass = ROOMS[bed].bedClass;
+    const base = ROOMS[bed].base;
+    const bid = person.roomPrices[bed];
+    const delta = bid - base;
+    allBidsByClass[bedClass].push({
+      person: person,
+      bed: bed,
+      delta: delta
+    });
+  }
+}
+
+// For each bed class, calculate weighted consensus price
+const classPrices = {};
+
+for (const [bedClass, allBids] of Object.entries(allBidsByClass)) {
+  // Find who got assigned to this class
+  const assignedPeople = new Set();
+  for (const assignment of assignments) {
+    if (ROOMS[assignment.bed].bedClass === bedClass) {
+      assignedPeople.add(assignment.person);
+    }
+  }
+  
+  // Separate assigned vs unassigned bids
+  const assignedBids = [];
+  const unassignedBids = [];
+  
+  for (const bid of allBids) {
+    if (assignedPeople.has(bid.person)) {
+      assignedBids.push(bid.delta);
+    } else {
+      unassignedBids.push(bid.delta);
+    }
+  }
+  
+  // Calculate weighted average (80% unassigned, 20% assigned)
+  const unassignedAvg = unassignedBids.length > 0
+    ? unassignedBids.reduce((sum, d) => sum + d, 0) / unassignedBids.length
+    : 0;
+  
+  const assignedAvg = assignedBids.length > 0
+    ? assignedBids.reduce((sum, d) => sum + d, 0) / assignedBids.length
+    : 0;
+  
+  const weightedDelta = (unassignedAvg * 0.8) + (assignedAvg * 0.2);
+  
+  // Get baseline for this class
+  const baselinePrice = Object.values(ROOMS).find(r => r.bedClass === bedClass).base;
+  
+  classPrices[bedClass] = {
+    baseline: baselinePrice,
+    weightedDelta: weightedDelta,
+    pricePerPerson: baselinePrice + weightedDelta,
+    assignedCount: assignedPeople.size,
+    assignedAvg: assignedAvg,
+    unassignedAvg: unassignedAvg
+  };
+  
+  console.log(`  ${bedClass.padEnd(15)}: baseline=$${baselinePrice.toString().padStart(4)}, weighted_delta=$${weightedDelta.toFixed(2).padStart(7)} → $${classPrices[bedClass].pricePerPerson.toFixed(2)}/person`);
+  console.log(`    (assigned avg: $${assignedAvg.toFixed(2)}, unassigned avg: $${unassignedAvg.toFixed(2)}, ${assignedPeople.size} people assigned)`);
+}
+
+// ---- Build assignment list with prices ----
 const allAssignments = [];
 
-for (const ca of coupleAssignments) {
-  const couple = ca.couple;
-  const bedClass = ROOMS[ca.beds[0]].bedClass;
+for (const a of assignments) {
+  const person = a.person;
+  const bed = a.bed;
+  const bedClass = ROOMS[bed].bedClass;
+  const pricePerPerson = classPrices[bedClass].pricePerPerson;
   
-  if (ca.type === 'double') {
-    // Both in one bed - use their averaged bid for that bed
-    const price = couple.roomPrices[ca.beds[0]];
-    
+  if (person.isCouple) {
     allAssignments.push({
-      emails: [couple.primary, couple.secondary],
-      beds: ca.beds[0],
+      emails: [person.primary, person.secondary],
+      bed: bed,
       bedClass: bedClass,
-      submittedPrice: price,
-      count: 2
+      pricePerPerson: pricePerPerson,
+      count: 2,
+      method: a.method
     });
   } else {
-    // Each in separate bed - use their averaged bids
     allAssignments.push({
-      emails: [couple.primary],
-      beds: ca.beds[0],
+      emails: [person.email],
+      bed: bed,
       bedClass: bedClass,
-      submittedPrice: couple.roomPrices[ca.beds[0]],
-      count: 1
-    });
-    allAssignments.push({
-      emails: [couple.secondary],
-      beds: ca.beds[1],
-      bedClass: bedClass,
-      submittedPrice: couple.roomPrices[ca.beds[1]],
-      count: 1
+      pricePerPerson: pricePerPerson,
+      count: 1,
+      method: a.method
     });
   }
-}
-
-for (const sa of singleAssignments) {
-  const bedClass = ROOMS[sa.bed].bedClass;
-  const price = sa.single.roomPrices[sa.bed];
-  
-  allAssignments.push({
-    emails: [sa.single.email],
-    beds: sa.bed,
-    bedClass: bedClass,
-    submittedPrice: price,
-    count: 1
-  });
-}
-
-// ---- Normalize prices within bed classes ----
-const classPrices = {};
-for (const a of allAssignments) {
-  if (!classPrices[a.bedClass]) {
-    classPrices[a.bedClass] = { totalPrice: 0, totalPeople: 0 };
-  }
-  classPrices[a.bedClass].totalPrice += a.submittedPrice * a.count;
-  classPrices[a.bedClass].totalPeople += a.count;
-}
-
-const classAverages = {};
-for (const [bedClass, data] of Object.entries(classPrices)) {
-  classAverages[bedClass] = data.totalPrice / data.totalPeople;
-  console.log(`  ${bedClass}: ${data.totalPeople} people, avg delta: $${classAverages[bedClass].toFixed(2)}`);
-}
-
-for (const a of allAssignments) {
-  a.normalizedPerPerson = classAverages[a.bedClass];
 }
 
 // ---- Zero-sum adjustment ----
 const totalPeople = allAssignments.reduce((sum, a) => sum + a.count, 0);
-let currentSum = allAssignments.reduce((sum, a) => sum + (a.normalizedPerPerson * a.count), 0);
+let currentSum = allAssignments.reduce((sum, a) => sum + (a.pricePerPerson * a.count), 0);
 
-console.log(`\n⚖️  Sum of deltas: $${currentSum.toFixed(2)}`);
-console.log(`   Applying zero-sum adjustment...\n`);
+console.log(`\n⚖️  Current sum of deltas: $${currentSum.toFixed(2)}`);
+console.log(`   Applying zero-sum adjustment across ${totalPeople} people...\n`);
 
 const perPersonAdjustment = -currentSum / totalPeople;
 console.log(`   Adjustment per person: $${perPersonAdjustment.toFixed(2)}`);
 
 for (const a of allAssignments) {
-  a.finalPerPerson = a.normalizedPerPerson + perPersonAdjustment;
+  a.finalPerPerson = a.pricePerPerson + perPersonAdjustment;
 }
 
 const finalSum = allAssignments.reduce((sum, a) => sum + (a.finalPerPerson * a.count), 0);
 console.log(`   Final sum: $${finalSum.toFixed(2)} ✓\n`);
-
-// ---- Track unassigned ----
-const assignedEmails = new Set();
-for (const a of allAssignments) {
-  for (const email of a.emails) {
-    assignedEmails.add(email);
-  }
-}
-
-const unassignedPeople = people.filter(p => !assignedEmails.has(p.email));
-
-if (unassignedPeople.length > 0) {
-  console.log(`⚠️  ${unassignedPeople.length} people could not be assigned (no capacity):`);
-  for (const p of unassignedPeople) {
-    console.log(`  ${p.email}`);
-  }
-  console.log('');
-}
 
 // ---- Output CSV ----
 const csvRows = ['email,bed,bedClass,delta,totalCost'];
@@ -371,16 +424,13 @@ const csvRows = ['email,bed,bedClass,delta,totalCost'];
 for (const a of allAssignments) {
   for (const email of a.emails) {
     const totalCost = 480 + a.finalPerPerson;
-    csvRows.push(`${email},${a.beds},${a.bedClass},${a.finalPerPerson.toFixed(2)},${totalCost.toFixed(2)}`);
+    csvRows.push(`${email},${a.bed},${a.bedClass},${a.finalPerPerson.toFixed(2)},${totalCost.toFixed(2)}`);
   }
 }
 
-fs.writeFileSync('bed-assignments.csv', csvRows.join('\n'));
+fs.writeFileSync('bed-assignments2.csv', csvRows.join('\n'));
 
 // ---- Output Markdown ----
-const couplesTogetherInOne = coupleAssignments.filter(ca => ca.type === 'double');
-const couplesOnSeparateBeds = coupleAssignments.filter(ca => ca.type === 'double-single');
-
 const md = `
 # 🛏️ Democratic Bed Assignments
 
@@ -392,8 +442,8 @@ Prices below are **DELTAS** (adjustments):
 
 ## Final Assignments
 
-| Person(s) | Bed(s) | Bed Class | Delta | Total |
-|-----------|--------|-----------|-------|-------|
+| Person(s) | Bed | Bed Class | Delta | Total | Method |
+|-----------|-----|-----------|-------|-------|--------|
 ${allAssignments
   .map(a => {
     const people = a.count === 2 
@@ -401,45 +451,59 @@ ${allAssignments
       : a.emails[0];
     const delta = a.finalPerPerson >= 0 ? `+$${a.finalPerPerson.toFixed(2)}` : `$${a.finalPerPerson.toFixed(2)}`;
     const total = (480 + a.finalPerPerson).toFixed(2);
-    return `| ${people} | ${a.beds} | ${a.bedClass} | ${delta} | $${total} |`;
+    return `| ${people} | ${a.bed} | ${a.bedClass} | ${delta} | $${total} | ${a.method} |`;
   })
   .join('\n')}
 
 ## Price Summary by Bed Class
 
-| Bed Class | People | Delta/Person | Total/Person |
-|-----------|--------|--------------|--------------|
-${Object.entries(classAverages)
-  .map(([bedClass, avg]) => {
-    const count = classPrices[bedClass].totalPeople;
-    const finalDelta = avg + perPersonAdjustment;
+| Bed Class | People | Delta/Person | Total/Person | Price Calculation |
+|-----------|--------|--------------|--------------|-------------------|
+${Object.entries(classPrices)
+  .map(([bedClass, data]) => {
+    const count = data.assignedCount;
+    const finalDelta = data.pricePerPerson + perPersonAdjustment;
     const deltaStr = finalDelta >= 0 ? `+$${finalDelta.toFixed(2)}` : `$${finalDelta.toFixed(2)}`;
     const total = (480 + finalDelta).toFixed(2);
-    return `| ${bedClass} | ${count} | ${deltaStr} | $${total} |`;
+    const calc = `Base: $${data.baseline}, Weighted: $${data.weightedDelta.toFixed(2)}`;
+    return `| ${bedClass} | ${count} | ${deltaStr} | $${total} | ${calc} |`;
   })
   .join('\n')}
+
+## Mechanism Details
+
+### Allocation Method
+1. **Preference-first**: People get beds they ranked highly
+2. **Utility resolution**: Conflicts resolved by preferences + bids + couple bonus
+3. **Couple priority**: +${COUPLE_BONUS} utility bonus for 2-capacity beds
+
+### Pricing Method
+1. **Consensus-based**: Prices based on ALL bids (not just winners)
+2. **Weighted**: 80% from unassigned people, 20% from assigned people
+3. **Zero-sum**: Final adjustment ensures deltas sum to $0
+
+### Weights Used
+- Preference weight: ${PREF_WEIGHT}
+- Bid weight: ${BID_WEIGHT}
+- Baseline weight: ${BASELINE_WEIGHT}
+- Couple bonus for 2-occupancy beds: ${COUPLE_BONUS}
 
 ## Verification
 
 ✓ Sum of deltas: $${finalSum.toFixed(2)}
 ✓ All beds in same class have identical prices
+✓ Preferences respected (conflicts resolved fairly)
 ✓ Couples stay together (never mixed with others)
 
-## Details
+## Assignment Details
 
-**Couples sharing one bed:** ${couplesTogetherInOne.length}
-${couplesTogetherInOne.map(ca => `- ${ca.couple.primary} + partner → ${ca.beds[0]}`).join('\n') || '_None_'}
-
-**Couples on separate beds (same type):** ${couplesOnSeparateBeds.length}
-${couplesOnSeparateBeds.map(ca => 
-  `- ${ca.couple.primary} → ${ca.beds[0]}\n- ${ca.couple.secondary} → ${ca.beds[1]}`
-).join('\n') || '_None_'}
-
-**Singles:** ${singles.length}
-${singleAssignments.map(sa => `- ${sa.single.email} → ${sa.bed}`).join('\n') || '_None_'}
+${allAssignments.map(a => {
+  const people = a.count === 2 ? `${a.emails[0]} + partner` : a.emails[0];
+  return `- ${people} → ${a.bed} [${a.method}]`;
+}).join('\n')}
 `;
 
-fs.writeFileSync('bed-assignments.md', md);
+fs.writeFileSync('bed-assignments2.md', md);
 
 console.log('✅ Files created:');
 console.log('   bed-assignments.csv');

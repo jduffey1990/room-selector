@@ -1,0 +1,1362 @@
+[
+  {
+    "id": "0GcJsUy1ba9NKF1h4QjF",
+    "email": "jluke11@gmail.com",
+    "emailLower": "jluke11@gmail.com",
+    "timestamp": "2026-01-22T17:42:16.559Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "floor2"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "Wv5pdMa3AYP3E1TiGKPy",
+    "email": "alykuiken@gmail.com",
+    "emailLower": "alykuiken@gmail.com",
+    "timestamp": "2026-01-22T22:14:59.232Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 175
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 125
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -125
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -125
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom4",
+      "bedroom2",
+      "bedroom3",
+      "bedroom5b"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "75QHDow6uo0TBS5sg6Eq",
+    "email": "alykuiken+copy@gmail.com",
+    "emailLower": "alykuiken+copy@gmail.com",
+    "timestamp": "2026-01-22T22:14:59.742Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 175
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 125
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -125
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -125
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom4",
+      "bedroom2",
+      "bedroom3",
+      "bedroom5b"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "5uPRMMZF7vLnrLDypshn",
+    "email": "gwhitman1985@gmail.com",
+    "emailLower": "gwhitman1985@gmail.com",
+    "timestamp": "2026-01-22T23:30:58.343Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 250
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 200
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 200
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 200
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -325
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -325
+      }
+    ],
+    "preferences": [
+      "bedroom1",
+      "bedroom2",
+      "bedroom3",
+      "bedroom4"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "ov6mrKxSasV0yMdRZcB7",
+    "email": "gwhitman1985+copy@gmail.com",
+    "emailLower": "gwhitman1985+copy@gmail.com",
+    "timestamp": "2026-01-22T23:30:58.618Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 250
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 200
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 200
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 200
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -325
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -325
+      }
+    ],
+    "preferences": [
+      "bedroom1",
+      "bedroom2",
+      "bedroom3",
+      "bedroom4"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "fClB3hIF2nb8rJKkzxIW",
+    "email": "tngiraud@gmail.com",
+    "emailLower": "tngiraud@gmail.com",
+    "timestamp": "2026-01-22T23:49:15.836Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom5b",
+      "bedroom5c",
+      "bedroom5d",
+      "bedroom5e"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "XTiGSJyu3Z3Bzn0sA7Zx",
+    "email": "sonnyjeeson@gmail.com",
+    "emailLower": "sonnyjeeson@gmail.com",
+    "timestamp": "2026-01-23T01:14:11.936Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom2",
+      "bedroom3",
+      "bedroom4",
+      "bedroom1",
+      "bedroom5b",
+      "bedroom5a",
+      "bedroom5c",
+      "bedroom5d",
+      "bedroom5e",
+      "bedroom5f"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "XD9zHqIMCDHtBLGPrnXo",
+    "email": "sonnyjeeson+copy@gmail.com",
+    "emailLower": "sonnyjeeson+copy@gmail.com",
+    "timestamp": "2026-01-23T01:14:12.362Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom2",
+      "bedroom3",
+      "bedroom4",
+      "bedroom1",
+      "bedroom5b",
+      "bedroom5a",
+      "bedroom5c",
+      "bedroom5d",
+      "bedroom5e",
+      "bedroom5f"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "A9A7u4tefsP9wpTcWrNG",
+    "email": "Jduffey1990@gmail.com",
+    "emailLower": "jduffey1990@gmail.com",
+    "timestamp": "2026-01-23T02:36:32.728Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 225
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 125
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -175
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -175
+      }
+    ],
+    "preferences": [
+      "bedroom4",
+      "bedroom2",
+      "bedroom5c",
+      "floor1"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "kNKTCDTQiHLor1hTQjiC",
+    "email": "Jduffey1990+copy@gmail.com",
+    "emailLower": "jduffey1990+copy@gmail.com",
+    "timestamp": "2026-01-23T02:36:32.968Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 225
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 125
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -175
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -175
+      }
+    ],
+    "preferences": [
+      "bedroom4",
+      "bedroom2",
+      "bedroom5c",
+      "floor1"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "hhGhm0iZkPZbfwmJjb7u",
+    "email": "mark.kolmer9@gmail.com",
+    "emailLower": "mark.kolmer9@gmail.com",
+    "timestamp": "2026-01-23T03:05:38.114Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 100
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 50
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -50
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -50
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom5a",
+      "bedroom5b",
+      "bedroom3",
+      "bedroom4"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "pavVgQEFJw8xKBWulwto",
+    "email": "mark.kolmer9+copy@gmail.com",
+    "emailLower": "mark.kolmer9+copy@gmail.com",
+    "timestamp": "2026-01-23T03:05:38.355Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 100
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 50
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -50
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -50
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom5a",
+      "bedroom5b",
+      "bedroom3",
+      "bedroom4"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "lovVYIcKf1TkUcesYF3Q",
+    "email": "ryen.birkinbine@gmail.com",
+    "emailLower": "ryen.birkinbine@gmail.com",
+    "timestamp": "2026-01-24T23:27:17.232Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "floor2",
+      "floor1",
+      "bedroom5f"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "aAdLHNDgBowi7WkelUh2",
+    "email": "steve.schank@gmail.com",
+    "emailLower": "steve.schank@gmail.com",
+    "timestamp": "2026-01-24T23:47:17.061Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "floor2",
+      "floor1",
+      "bedroom5f",
+      "bedroom5e",
+      "bedroom5d"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "4qQhBz76bQtCcMKTy5Ac",
+    "email": "jeffdseligman@gmail.com",
+    "emailLower": "jeffdseligman@gmail.com",
+    "timestamp": "2026-01-25T16:30:28.789Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": -100
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": -100
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": -200
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": -200
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -200
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": 25
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -25
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -25
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": 25
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": 0
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": 200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": 200
+      }
+    ],
+    "preferences": [
+      "floor1",
+      "floor2",
+      "bedroom5b",
+      "bedroom5e"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "qpDlppKKRorJniBpE4zB",
+    "email": "klantz2210@gmail.com",
+    "emailLower": "klantz2210@gmail.com",
+    "timestamp": "2026-01-25T19:58:13.983Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -150
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -150
+      }
+    ],
+    "preferences": [
+      "bedroom5b",
+      "bedroom5a",
+      "bedroom4",
+      "floor1",
+      "floor2"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "M2Bj0ALljHppIhlTUYvI",
+    "email": "klantz2210+copy@gmail.com",
+    "emailLower": "klantz2210+copy@gmail.com",
+    "timestamp": "2026-01-25T19:58:14.245Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -150
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -150
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -150
+      }
+    ],
+    "preferences": [
+      "bedroom5b",
+      "bedroom5a",
+      "bedroom4",
+      "floor1",
+      "floor2"
+    ],
+    "totalAdjustment": 0
+  },
+  {
+    "id": "bkLwRSuAdv53exm2Uu5d",
+    "email": "allisonbrowndds@gmail.com",
+    "emailLower": "allisonbrowndds@gmail.com",
+    "timestamp": "2026-01-27T01:27:32.898Z",
+    "roomPrices": [
+      {
+        "id": "bedroom1",
+        "name": "Bedroom 1: Primary King Suite",
+        "price": 200
+      },
+      {
+        "id": "bedroom2",
+        "name": "Bedroom 2: King Room",
+        "price": 150
+      },
+      {
+        "id": "bedroom3",
+        "name": "Bedroom 3: King Room (Downstairs)",
+        "price": 150
+      },
+      {
+        "id": "bedroom4",
+        "name": "Bedroom 4: King Room",
+        "price": 100
+      },
+      {
+        "id": "bedroom5a",
+        "name": "Bedroom 5: Full Bunk (Top)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5b",
+        "name": "Bedroom 5: Full Bunk (Bottom)",
+        "price": -100
+      },
+      {
+        "id": "bedroom5c",
+        "name": "Bedroom 5: Twin Bunk 1",
+        "price": -100
+      },
+      {
+        "id": "bedroom5d",
+        "name": "Bedroom 5: Twin Bunk 2",
+        "price": -100
+      },
+      {
+        "id": "bedroom5e",
+        "name": "Bedroom 5: Twin Bunk 3",
+        "price": -100
+      },
+      {
+        "id": "bedroom5f",
+        "name": "Bedroom 5: Twin Bunk 4",
+        "price": -100
+      },
+      {
+        "id": "floor1",
+        "name": "Floor Spot: Earth Napper",
+        "price": -200
+      },
+      {
+        "id": "floor2",
+        "name": "Floor Spot: Ground Chiller",
+        "price": -200
+      }
+    ],
+    "preferences": [
+      "bedroom4",
+      "bedroom5a",
+      "bedroom5b"
+    ],
+    "totalAdjustment": 0
+  }
+]
