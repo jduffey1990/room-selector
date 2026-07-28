@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, addDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db } from '../firebase';
 import { BarChart3, CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader } from 'lucide-react';
 
 const PRICE_INCREMENT = 25;

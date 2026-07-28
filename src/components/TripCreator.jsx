@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db } from '../firebase';
 import { PlusCircle, Trash2, Copy, Check } from 'lucide-react';
 
 function generateCode(length = 8) {
