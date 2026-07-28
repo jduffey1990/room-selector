@@ -31,7 +31,8 @@
      producing unreadable dark-on-dark inputs. */
   color-scheme: light;
   color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
+  /* Selecta cream, so overscroll matches the page surfaces. */
+  background-color: #FAF3E3;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

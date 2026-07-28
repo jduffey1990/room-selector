@@ -111,14 +111,14 @@ export default function TripCreator() {
     const adminUrl = `${window.location.origin}${window.location.pathname}#/admin/${tripId}`;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 py-12 px-4">
+      <div className="min-h-screen bg-selecta-cream py-12 px-4">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8">
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Check className="w-10 h-10 text-green-600" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Trip Created!</h2>
+              <h2 className="font-display text-3xl font-bold text-selecta-ink mb-2">Trip Created!</h2>
               <p className="text-gray-600">Your trip "{tripName}" is ready</p>
             </div>
 
@@ -187,10 +187,10 @@ export default function TripCreator() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-12 px-4">
+    <div className="min-h-screen bg-selecta-cream py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Trip</h1>
+          <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2">Create New Trip</h1>
           <p className="text-gray-600 mb-8">
             {step === 1 ? 'Enter trip details' : 'Add rooms and pricing'}
           </p>

@@ -38,7 +38,7 @@ context.on('page', (page) => {
   page.on('pageerror', (err) => consoleErrors.push({url: page.url(), text: `pageerror: ${err.message}`}));
 });
 
-const card = (name) => `div.bg-white.rounded-lg.shadow-lg.overflow-hidden:has(h3:text-is("${name}"))`;
+const card = (name) => `[data-testid="room-card"]:has(h3:text-is("${name}"))`;
 
 async function submitParticipant(email, prefOrder, adjustments = {}, partner = null) {
   const page = await context.newPage();

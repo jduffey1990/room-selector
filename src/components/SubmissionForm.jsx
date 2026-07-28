@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, callFn } from '../firebase';
-import { BarChart3, CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
+import SelectaBot, { BotLoading } from './SelectaBot';
 
 const PRICE_INCREMENT = 25;
 
@@ -154,14 +155,7 @@ export default function SubmissionForm() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading trip...</p>
-        </div>
-      </div>
-    );
+    return <BotLoading label="Selecta-bot is fetching the beds…" />;
   }
 
   if (error) {
@@ -182,11 +176,11 @@ export default function SubmissionForm() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
-          <CheckCircle2 className="w-20 h-20 text-green-600 mx-auto mb-4" />
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Submitted!</h2>
-          <p className="text-gray-600 mb-6">
+      <div className="min-h-screen bg-selecta-cream flex items-center justify-center px-4">
+        <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8 max-w-md text-center">
+          <SelectaBot state="done" size={96} className="mx-auto mb-4" />
+          <h2 className="font-display text-3xl font-bold text-selecta-ink mb-2">Submitted!</h2>
+          <p className="text-selecta-slate mb-6">
             Your room preferences for <strong>{trip.name}</strong> have been recorded.
           </p>
           <button
@@ -201,11 +195,11 @@ export default function SubmissionForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-selecta-cream py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{trip.name}</h1>
-          <p className="text-gray-600">
+        <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
+          <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2">{trip.name}</h1>
+          <p className="text-selecta-slate">
             ${Number(trip.totalTripCost || 0).toLocaleString()} total • about $
             {tripPerPerson.toFixed(2)}/person before bed adjustments •{' '}
             {rooms.length} beds
@@ -231,7 +225,7 @@ export default function SubmissionForm() {
         </div>
 
         {/* Email Input */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Your Email
           </label>
@@ -269,7 +263,7 @@ export default function SubmissionForm() {
             const isExpanded = expandedRoom === room.id;
 
             return (
-              <div key={room.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div key={room.id} data-testid="room-card" className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 overflow-hidden">
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
@@ -295,7 +289,7 @@ export default function SubmissionForm() {
                       onClick={() => togglePreference(room.id)}
                       className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
                         isRanked
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          ? 'bg-selecta-teal text-white hover:bg-selecta-teal-dark'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
@@ -361,11 +355,11 @@ export default function SubmissionForm() {
         </div>
 
         {/* Submit */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6">
           <button
             onClick={handleSubmit}
             disabled={!isBalanced || !email.trim() || preferences.length === 0}
-            className="w-full bg-indigo-600 text-white px-6 py-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition font-bold text-lg"
+            className="w-full bg-selecta-teal text-white px-6 py-4 rounded-lg hover:bg-selecta-teal-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition font-bold text-lg"
           >
             Submit Preferences
           </button>

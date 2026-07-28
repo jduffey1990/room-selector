@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callFn } from '../firebase';
-import { LogIn, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import SelectaBot from './SelectaBot';
 
 export default function TripJoin() {
   const navigate = useNavigate();
@@ -40,15 +41,13 @@ export default function TripJoin() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 py-12 px-4">
+    <div className="min-h-screen bg-selecta-cream py-12 px-4">
       <div className="max-w-md mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LogIn className="w-10 h-10 text-purple-600" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Join a Trip</h1>
-            <p className="text-gray-600">
+            <SelectaBot state="idle" size={80} className="mx-auto mb-4" />
+            <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2">Join a Trip</h1>
+            <p className="text-selecta-slate">
               Enter the trip code shared by your organizer
             </p>
           </div>
@@ -66,7 +65,7 @@ export default function TripJoin() {
                   setError('');
                 }}
                 placeholder="ABC12345"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center font-mono text-lg tracking-wider uppercase"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal text-center font-mono text-lg tracking-wider uppercase"
                 maxLength={12}
               />
             </div>
@@ -81,7 +80,7 @@ export default function TripJoin() {
             <button
               type="submit"
               disabled={loading || !code.trim()}
-              className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition font-medium"
+              className="w-full bg-selecta-coral text-white px-6 py-3 rounded-lg hover:bg-selecta-coral-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition font-medium"
             >
               {loading ? 'Joining...' : 'Join Trip'}
             </button>
@@ -90,16 +89,16 @@ export default function TripJoin() {
           <div className="mt-8 text-center">
             <button
               onClick={() => navigate('/')}
-              className="text-purple-600 hover:text-purple-800 font-medium"
+              className="text-selecta-teal hover:text-selecta-teal-dark font-medium"
             >
               ← Back to Home
             </button>
           </div>
         </div>
 
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">💡 Don't have a code?</h3>
-          <p className="text-sm text-blue-700">
+        <div className="mt-6 bg-selecta-teal-light border border-selecta-teal/30 rounded-lg p-4">
+          <h3 className="font-semibold text-selecta-teal-dark mb-2">Don't have a code?</h3>
+          <p className="text-sm text-selecta-teal-dark">
             Ask your trip organizer to share the participant link or trip code with you.
             If you're the organizer, go back and create a new trip instead.
           </p>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { callFn } from '../firebase';
-import { BarChart3, Download, Lock, Unlock, Loader, AlertCircle, Play } from 'lucide-react';
+import { BarChart3, Download, Lock, Loader, AlertCircle, Play } from 'lucide-react';
+import { BotLoading } from './SelectaBot';
 
 export default function AdminDashboard() {
   const { tripId } = useParams();
@@ -165,14 +166,7 @@ export default function AdminDashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <BotLoading label="Selecta-bot is opening the control panel…" />;
   }
 
   if (error) {
@@ -230,12 +224,12 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-selecta-cream py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-3xl font-bold text-gray-900">{trip.name}</h1>
+            <h1 className="font-display text-3xl font-bold text-selecta-ink">{trip.name}</h1>
             <button
               onClick={() => navigate('/')}
               className="text-indigo-600 hover:text-indigo-800"
@@ -287,7 +281,7 @@ export default function AdminDashboard() {
               <button
                 onClick={runAllocation}
                 disabled={allocating}
-                className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition font-bold flex items-center justify-center gap-2"
+                className="w-full bg-selecta-teal text-white px-6 py-3 rounded-lg hover:bg-selecta-teal-dark disabled:bg-gray-400 disabled:cursor-not-allowed transition font-bold flex items-center justify-center gap-2"
               >
                 {allocating ? (
                   <>

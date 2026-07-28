@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, callFn } from '../firebase';
-import { Trophy, Users, DollarSign, Loader, AlertCircle, Home } from 'lucide-react';
+import { Trophy, Users, DollarSign, AlertCircle, Home } from 'lucide-react';
+import SelectaBot, { BotLoading } from './SelectaBot';
 
 export default function ResultsView() {
   const { tripId } = useParams();
@@ -115,14 +116,7 @@ export default function ResultsView() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading results...</p>
-        </div>
-      </div>
-    );
+    return <BotLoading label="Selecta-bot is retrieving the assignments…" />;
   }
 
   if (error) {
@@ -144,16 +138,16 @@ export default function ResultsView() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 py-8 px-4">
+    <div className="min-h-screen bg-selecta-cream py-8 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
+        <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Trophy className="w-10 h-10 text-yellow-500" />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{trip.name}</h1>
-                <p className="text-gray-600">Final Room Assignments</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <SelectaBot state="done" size={56} className="flex-shrink-0" />
+              <div className="min-w-0">
+                <h1 className="font-display text-3xl font-bold text-selecta-ink">{trip.name}</h1>
+                <p className="text-selecta-slate">Final Room Assignments</p>
               </div>
             </div>
             <button
@@ -235,11 +229,11 @@ export default function ResultsView() {
                     key={assignment.id} 
                     className="border-2 border-gray-200 rounded-xl p-5 hover:shadow-md transition-all"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          {isCouple && <Users className="w-5 h-5 text-purple-600" />}
-                          <h3 className="font-bold text-lg text-gray-900">
+                          {isCouple && <Users className="w-5 h-5 text-purple-600 flex-shrink-0" />}
+                          <h3 className="font-bold text-lg text-gray-900 break-words min-w-0">
                             {assignment.emails.join(' + ')}
                           </h3>
                         </div>
@@ -251,9 +245,9 @@ export default function ResultsView() {
                         </p>
                       </div>
                       
-                      <div className="text-right ml-4">
+                      <div className="text-left sm:text-right sm:ml-4 flex-shrink-0">
                         <div className={`px-4 py-2 rounded-lg font-bold text-lg ${adjustmentColor} mb-1`}>
-                          {assignment.priceAdjustment >= 0 ? '+' : ''}${assignment.priceAdjustment.toFixed(2)}
+                          {assignment.priceAdjustment >= 0 ? '+' : '-'}${Math.abs(assignment.priceAdjustment).toFixed(2)}
                         </div>
                         <p className="text-sm text-gray-600">
                           Total: <span className="font-bold">${assignment.totalPerPerson.toFixed(2)}</span>/person
