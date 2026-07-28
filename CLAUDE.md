@@ -85,27 +85,69 @@ Two production-only failure modes already hit once, worth remembering:
 
 ---
 
+## Start here (autonomous session)
+
+Work in this order. Everything below is safe to do without the user awake.
+
+1. **Prove the last untested path.** Drive `submitPreferences` -> `allocateRooms`
+   -> `ResultsView` through the deployed site against the `[demo] Napa Cabin
+   Weekend` trip (3 beds, smallest). Codes are printed by
+   `node seed/seed-demo-trips.js`; re-run `--clean` then reseed if you need
+   fresh ones. If allocation fails, that is the highest-priority bug in the repo.
+2. **P2.1** — port the envy-free allocator into `functions/allocation.js`.
+3. **P2.2** — build the simulation harness.
+4. **P1.2** — replace the `+copy` couples hack.
+5. **P3.2 / mobile** — Selecta-bot design pass, mobile-first.
+
+**P1.1 (magic-link auth) needs a decision the user has not made** about how
+verification interacts with the existing code-based flow. Draft it, do not ship
+it.
+
+### Rules of engagement while unattended
+
+- **Deploy freely, but never partially.** `firebase deploy` ships rules,
+  functions and hosting together. Deploying one without the others is how this
+  breaks. Always `npm run build` first, or hosting serves a stale bundle.
+- **Verify in a browser, not by reading.** Every production bug in this repo so
+  far returned HTTP 200 and logged nothing: a blank page from a bad asset base,
+  a 403 function that looked deployed, an unreadable input that light mode hid.
+  Use Playwright in a dark-mode context and assert zero console errors.
+- **Clean up test data.** Anything you create in Firestore should be prefixed
+  `[demo]` so `node seed/seed-demo-trips.js --clean` removes it. The three
+  `[demo]` trips are intentional fixtures — leave them.
+- **Do not touch** `seed/v1-archive/`, `seed/serviceAccountKey.json` (gitignored,
+  never commit it), or DNS.
+- **Commit as you go**, one logical change each. Do not push.
+
+---
+
 ## Roadmap
 
-### P0 — Deployment
+### P0 — Deployment — DONE
 
-**0.1 Add the `www` custom domain** — *STILL OPEN, user action, ~5 min, Firebase
-console.* The apex has a valid cert, but it 301-redirects to `www`, and
-`www.roomselector5000.com` was never registered — so Firebase serves its default
-`firebaseapp.com` cert there, producing `ERR_CERT_COMMON_NAME_INVALID`. Until this
-is done the custom domain is unusable; `https://room-selector.web.app` works.
+**0.1 `www` custom domain** — registered; DNS in and propagated
+(`CNAME www -> room-selector.web.app -> 199.36.158.100`). **The TLS cert was
+still provisioning at handoff.** Firebase answers the ACME HTTP challenge
+itself; issuance takes 20-60 min, sometimes hours.
+
+> **Do not touch DNS or the custom domain.** Re-adding, deleting, or "fixing"
+> anything while the cert is pending resets the clock and is the most common way
+> a one-hour wait becomes a two-day one. If `https://www.roomselector5000.com`
+> still fails, that is expected — just wait. Use
+> `https://room-selector.web.app`, which works.
 
 **0.2 Client onto callables** — DONE.
 **0.3 Deploy rules + functions + hosting** — DONE.
 **0.4 Hosting serving `dist/`** — DONE.
 
-Verified in production: create → participant view → admin, with correct
-per-person math and zero console errors. A wrong admin code shows the unlock
-prompt and leaks nothing on a fresh load.
+Verified in production: create -> participant view -> admin, correct per-person
+math, zero console errors, and a wrong admin code leaking nothing on a fresh
+load.
 
 **Not yet exercised in production:** `submitPreferences` and `allocateRooms`
-through the UI. The callables were verified against the emulator over real
-Firestore, but no trip has been allocated end to end on the deployed stack.
+through the deployed UI. Both passed against the emulator over real Firestore,
+but no trip has been allocated end to end on the deployed stack. **Do this
+first** — see "Start here".
 
 ---
 
