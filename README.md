@@ -40,31 +40,49 @@ Run against the 18 real submissions from the January 2026 trip. See
 
 ## Deploying
 
+**Live:** https://www.roomselector5000.com (and https://room-selector.web.app).
+
 ```bash
 npm run build
-firebase deploy
+firebase deploy --only firestore,functions,hosting
 ```
 
-> **Not launch-ready.** `firebase.json` points hosting at `hosting-placeholder/`
-> deliberately. The six components still read Firestore directly, which the
-> current rules forbid, so the client refactor has to land before hosting can be
-> flipped to `dist/`.
+Rules, functions, and hosting must ship together — any two without the third
+is a broken app. Build first, or hosting serves a stale bundle.
 
 Requires the Blaze plan — Cloud Functions need it. A $5 budget alert is
 configured, but **GCP budgets only alert, they never cap spend**. The real
 ceiling is `maxInstances` on each callable.
 
+## Verifying
+
+```bash
+node verify/regression-envyfree.cjs    # port matches the reference, 18/18
+node verify/simulate-envyfree.cjs      # 576 synthetic trips, zero envy
+PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>
+```
+
+The e2e drives the deployed site in a dark-mode browser and fails on any
+console error; codes come from `node seed/seed-demo-trips.js`
+(`--clean` first). Pass `--discriminating` to prove which allocator is
+deployed — v1 and envy-free price near-uniform bids identically.
+
 ## Layout
 
 ```
 src/
-  components/            HomePage, TripCreator, TripJoin,
-                         SubmissionForm, AdminDashboard, ResultsView
+  components/            HomePage, TripCreator, TripJoin, SubmissionForm,
+                         AdminDashboard, ResultsView, SelectaBot
   firebase.js            client config — the only one, don't add a second
-functions/               callable functions: all writes, all sensitive reads
+functions/
+  allocation.js          the envy-free allocator (production)
+  index.js               callable functions: all writes, all sensitive reads
 seed/
-  allocate-envyfree.js   current allocator
+  allocate-envyfree.js   reference implementation of the allocator
   v1-archive/            frozen — how the January 2026 trip actually ran
+verify/                  e2e, regression, and simulation harnesses + results
+docs/drafts/             decision docs (magic-link auth)
 firestore.rules          deny-by-default; the whole security model
 ```
 

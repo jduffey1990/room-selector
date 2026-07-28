@@ -144,11 +144,24 @@ custom-domain certs live. Proofs live in `verify/`; theory in
 trip codes keep gating access; auth binds identity at the moment of
 submission. That draft is now the implementation reference.
 
-**1.1 Magic-link auth.** Firebase Auth email-link sign-in. Firebase sends
-these emails itself at no cost (sender `noreply@room-selector.firebaseapp.com`;
-custom sender domain is a later nicety). `submitPreferences` requires
+**1.1 Magic-link auth.** Firebase Auth email-link sign-in. **Sender decided
+2026-07-28: launch with the default** `noreply@room-selector.firebaseapp.com`
+(Google-reputation deliverability, zero DNS). The *links inside* the email
+use `www.roomselector5000.com` — the hosting domain already serves the
+`/__/auth/action` handler; set `actionCodeSettings.url` to it and add the
+domain to Auth's authorized domains. `submitPreferences` requires
 `request.auth` and takes the email from the verified token. Enforce for new
 submissions only; do not invalidate existing trips.
+
+**1.3 Custom sender domain — parked, owner-triggered.** Later, one
+deliberate DNS session (owner adds Brevo's SPF/DKIM + verification records
+at the registrar — additive TXT/CNAMEs, no risk to the site's A records)
+flips *both* streams to `noreply@roomselector5000.com`: auth emails via
+Firebase Auth's custom-SMTP setting pointed at Brevo, results emails already
+on Brevo. **Never half-configure this**: a custom sender without verified
+SPF/DKIM lands in spam, and a spam-foldered magic link is a locked-out
+user. Default sender until the DNS work is done, then fully verified —
+nothing in between.
 
 **1.2 Results email at finalization.** Without it the organizer hand-delivers
 results to 18 people. Send from `allocateRooms` after the batch commits, via a
@@ -254,6 +267,33 @@ callables plus dashboard UI:
   that bidding true values is what makes the result defensible.
 - **Equal-budget bidding** (the real answer to wealth leaking into
   allocations, and to manipulation among strangers) and a pro tier.
+- **Small polish, grab when touching the client:** replace the default Vite
+  favicon (`index.html` still points at `/vite.svg`) with a Selecta-bot head
+  SVG; custom sender domain (P1.3 above) once the owner does the DNS session.
+
+---
+
+## Session wind-down — do this automatically at the end of every thread
+
+When a working session is wrapping up (roadmap section done, context running
+long, or the owner says they're switching agents), run this checklist without
+being asked. A session isn't finished until its hand-off is.
+
+1. **Reality-sync this file.** Current-state table, roadmap (move shipped
+   items to Shipped, promote any decisions made mid-thread from "options"
+   to "decided" with the date), and the do-not-ship list.
+2. **Docs sweep — does anything now lie?** README.md, ARCHITECTURE.md, and
+   `docs/drafts/*` are checked against what actually shipped. (Lesson: the
+   README said "not launch-ready, hosting points at a placeholder" for weeks
+   after launch.)
+3. **Restore fixtures.** `seed/seed-demo-trips.js --clean` then reseed once;
+   confirm no stray `[demo]` data or orphaned collections remain.
+4. **Run the verify suite** relevant to what changed (`verify/*`); measured
+   results go in commit messages.
+5. **Commit everything** in logical units. Never push.
+6. **Write the hand-off summary**: shipped / verified-how / blocked-on-what /
+   decisions the owner still owes. If a durable convention emerged, save it
+   to agent memory too.
 
 ---
 
