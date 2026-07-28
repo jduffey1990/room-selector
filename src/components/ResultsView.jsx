@@ -236,7 +236,7 @@ export default function ResultsView() {
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="font-bold text-blue-900 mb-2">💡 How Pricing Works</h3>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Base cost: ${trip.baseCostPerPerson}/person (already paid)</li>
+            <li>• Trip total: ${Number(trip.totalTripCost || 0).toLocaleString()}, split across everyone</li>
             <li>• Price adjustments reflect room quality and preferences</li>
             <li>• All adjustments sum to $0 (zero-sum system)</li>
             <li>• Identical room types have identical prices</li>

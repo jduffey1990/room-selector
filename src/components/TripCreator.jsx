@@ -16,12 +16,22 @@ export default function TripCreator() {
   
   // Trip details
   const [tripName, setTripName] = useState('');
-  const [baseCost, setBaseCost] = useState(480);
-  
+  const [totalCost, setTotalCost] = useState('');
+
   // Rooms
   const [rooms, setRooms] = useState([
     { name: '', description: '', basePrice: 0, capacity: 1, type: 'king' }
   ]);
+
+  // The organizer knows what the whole place costs, not what each person owes.
+  // Split it across every bed they list, so the per-person figure updates live
+  // as beds are added. allocateRooms recomputes it from the real headcount.
+  const totalCapacity = rooms.reduce(
+    (sum, r) => sum + (parseInt(r.capacity, 10) || 1), 0
+  );
+  const perPerson = totalCapacity > 0 && Number(totalCost) > 0
+    ? Number(totalCost) / totalCapacity
+    : 0;
   
   // Generated codes
   const [tripId, setTripId] = useState('');
@@ -67,7 +77,7 @@ export default function TripCreator() {
       // Create trip document
       const tripRef = await addDoc(collection(db, 'trips'), {
         name: tripName,
-        baseCostPerPerson: baseCost,
+        totalTripCost: Number(totalCost) || 0,
         adminCode: admin,
         participantCode: participant,
         status: 'collecting',
@@ -85,7 +95,6 @@ export default function TripCreator() {
           basePrice: parseFloat(room.basePrice) || 0,
           capacity: parseInt(room.capacity) || 1,
           type: room.type,
-          note: `$${baseCost + (parseFloat(room.basePrice) || 0)}/person total`,
         });
       });
       await batch.commit();
@@ -175,8 +184,9 @@ export default function TripCreator() {
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-900 mb-2">Trip Details:</h4>
                 <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Base cost: ${baseCost}/person</li>
-                  <li>• Total rooms: {rooms.length}</li>
+                  <li>• Trip total: ${Number(totalCost).toLocaleString()}</li>
+                  <li>• Sleeps {totalCapacity} across {rooms.length} beds</li>
+                  <li>• About ${perPerson.toFixed(2)}/person before bed adjustments</li>
                   <li>• Trip ID: {tripId}</li>
                 </ul>
               </div>
@@ -233,17 +243,18 @@ export default function TripCreator() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Base Cost Per Person ($) *
+                  Total Trip Cost ($) *
                 </label>
                 <input
                   type="number"
-                  value={baseCost}
-                  onChange={(e) => setBaseCost(e.target.value)}
-                  placeholder="480"
+                  value={totalCost}
+                  onChange={(e) => setTotalCost(e.target.value)}
+                  placeholder="8640"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  This is the base amount everyone has already paid
+                  What the whole place costs. You'll add beds next, and we'll
+                  split this across them.
                 </p>
               </div>
 
@@ -256,7 +267,7 @@ export default function TripCreator() {
                 </button>
                 <button
                   onClick={() => setStep(2)}
-                  disabled={!tripName.trim()}
+                  disabled={!tripName.trim() || !(Number(totalCost) > 0)}
                   className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                 >
                   Next: Add Rooms
@@ -267,6 +278,26 @@ export default function TripCreator() {
 
           {step === 2 && (
             <div className="space-y-6">
+              {/* Live split: the whole point is that the organizer sees the
+                  per-person number move as they add beds. */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <p className="text-sm text-indigo-700">
+                    ${Number(totalCost || 0).toLocaleString()} split{' '}
+                    {totalCapacity} {totalCapacity === 1 ? 'way' : 'ways'} — sleeps{' '}
+                    {totalCapacity} across {rooms.length}{' '}
+                    {rooms.length === 1 ? 'bed' : 'beds'}
+                  </p>
+                  <p className="text-xs text-indigo-600 mt-0.5">
+                    Recalculated from the real headcount when you run the allocation
+                  </p>
+                </div>
+                <p className="text-2xl font-bold text-indigo-900">
+                  ${perPerson.toFixed(2)}
+                  <span className="text-sm font-normal text-indigo-700">/person</span>
+                </p>
+              </div>
+
               <div className="space-y-4">
                 {rooms.map((room, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
@@ -338,7 +369,7 @@ export default function TripCreator() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Total: ${baseCost + (parseFloat(room.basePrice) || 0)}/person
+                          Total: ${(perPerson + (parseFloat(room.basePrice) || 0)).toFixed(2)}/person
                         </p>
                       </div>
                       <div>

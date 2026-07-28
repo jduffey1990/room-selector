@@ -160,7 +160,7 @@ export default function AdminDashboard() {
       trip: {
         id: trip.id,
         name: trip.name,
-        baseCost: trip.baseCostPerPerson,
+        totalTripCost: trip.totalTripCost,
         createdAt: trip.createdAt
       },
       rooms,

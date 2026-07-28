@@ -58,7 +58,7 @@ async function requireAdmin(tripId, adminCode) {
 }
 
 exports.createTrip = onCall(opts, async (request) => {
-  const {name, baseCostPerPerson, rooms} = request.data || {};
+  const {name, totalTripCost, rooms} = request.data || {};
 
   if (typeof name !== "string" || !name.trim()) {
     throw new HttpsError("invalid-argument", "Trip name required");
@@ -82,7 +82,7 @@ exports.createTrip = onCall(opts, async (request) => {
   // firestore.rules allows the world to read it.
   batch.set(tripRef, {
     name: name.trim().slice(0, 120),
-    baseCostPerPerson: Number(baseCostPerPerson) || 0,
+    totalTripCost: Number(totalTripCost) || 0,
     status: "collecting",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -271,6 +271,14 @@ exports.allocateRooms = onCall(opts, async (request) => {
       batch.delete(doc.ref);
     });
 
+    // The trip stores a total, not a per-person figure. Everything up to here
+    // used bed capacity as an estimate; now that submissions are in, split by
+    // the real headcount so the group collects exactly totalTripCost.
+    const headcount = allAssignments.reduce(
+        (n, a) => n + a.emails.length, 0);
+    const basePerPerson = headcount > 0 ?
+        (Number(trip.totalTripCost) || 0) / headcount : 0;
+
     // Create new assignments
     for (const assignment of allAssignments) {
       const assignmentRef = db.collection("assignments").doc();
@@ -281,7 +289,7 @@ exports.allocateRooms = onCall(opts, async (request) => {
         roomIds: assignment.bedIds,
         bedClass: assignment.bedClass,
         priceAdjustment: assignment.finalPerPerson,
-        totalPerPerson: trip.baseCostPerPerson + assignment.finalPerPerson,
+        totalPerPerson: basePerPerson + assignment.finalPerPerson,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }

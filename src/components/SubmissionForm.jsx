@@ -42,8 +42,13 @@ export default function SubmissionForm() {
       const roomsRef = collection(db, 'rooms');
       const q = query(roomsRef, where('tripId', '==', tripId));
       const roomsSnapshot = await getDocs(q);
-      const roomsData = roomsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
+      // Firestore returns documents in arbitrary order, which reads as random
+      // shuffling to a participant. Sort best-to-worst so the list has an
+      // obvious shape.
+      const roomsData = roomsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => (b.basePrice || 0) - (a.basePrice || 0));
+
       setRooms(roomsData);
       setRoomPrices(roomsData.map(r => ({ ...r, price: r.basePrice })));
       
@@ -60,6 +65,15 @@ export default function SubmissionForm() {
       prev.map(r => r.id === roomId ? { ...r, price: r.price + amount } : r)
     );
   };
+
+  // Mirrors TripCreator: the trip stores a total, and the per-person share is
+  // derived from how many people the beds sleep.
+  const tripCapacity = rooms.reduce(
+    (sum, r) => sum + (parseInt(r.capacity, 10) || 1), 0
+  );
+  const tripPerPerson = tripCapacity > 0 && Number(trip?.totalTripCost) > 0
+    ? Number(trip.totalTripCost) / tripCapacity
+    : 0;
 
   const totalAdjustment = roomPrices.reduce((sum, room) => {
     const original = rooms.find(r => r.id === room.id);
@@ -200,7 +214,9 @@ export default function SubmissionForm() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{trip.name}</h1>
           <p className="text-gray-600">
-            Base cost: ${trip.baseCostPerPerson}/person • {rooms.length} rooms available
+            ${Number(trip.totalTripCost || 0).toLocaleString()} total • about $
+            {tripPerPerson.toFixed(2)}/person before bed adjustments •{' '}
+            {rooms.length} beds
           </p>
         </div>
 
@@ -251,7 +267,11 @@ export default function SubmissionForm() {
                     <div className="flex-1">
                       <h3 className="text-lg font-bold text-gray-900">{room.name}</h3>
                       <p className="text-sm text-gray-600">{room.description}</p>
-                      <p className="text-sm text-gray-500 mt-1">{room.note}</p>
+                      {/* Computed at render. This used to be a `note` string
+                          baked in at trip creation, which froze the number. */}
+                      <p className="text-sm text-gray-500 mt-1">
+                        ${(tripPerPerson + (room.basePrice || 0)).toFixed(2)}/person total
+                      </p>
                     </div>
                     <div className="text-right ml-4">
                       <p className="text-2xl font-bold text-indigo-600">
