@@ -26,6 +26,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# E2E verification scratch output (screenshots, probes)
+.tmp-verify/
+
 # Firebase
 .firebaserc
 .firebase/
