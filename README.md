@@ -245,6 +245,24 @@ It produces outcomes that may not make everyone *perfectly happy*, but should ma
 
 ---
 
+## Next Up
+Move from just solving the problem for us today, to soliving this problem for anyone:
+
+1.  DB only allows for submissions.  We would need new db structure
+  -Trip (each trip has it's own db)
+  -Room (foreign key on trip or however that works in NoSQL)
+  -Submissions (pretty much as is now, but would need to be more robust)
+2.  Advertising.  I have never done advertisment on a web app before, but I would think it might be a good time to implement something like that.  If a new trip is submitted, show add.  Sleeping situation set for trip, show add.  User submits their preferences for the trip, show add.
+3.  UI would need updating.  I think what we have is good for the submissions process, sure.  We would need a system.  I have done user validation and could have a backend for that basically immediately, but would like some relevant information on whether we do that or leave it open, but the users would need some code saved to access their trip.
+
+### In the maybe section!!!  
+**Not sure if we should do for an mvp of the project, but these are ideas**
+1.  Chron job that deletes trips that have been finished for a month
+
+
+
+---
+
 ## License
 
 UNLICENSED - no reproduction or use without explicit permission

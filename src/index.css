@@ -2,12 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind preflight sets `color: inherit` on form controls but leaves their
+   background to the user agent, so inputs can end up dark-on-dark. Pin both.
+   Utility classes in markup still win over these base-layer defaults. */
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: #ffffff;
+    color: #111827; /* gray-900 */
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af; /* gray-400 */
+    opacity: 1;
+  }
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  /* The UI is designed light-only (white cards, gray-on-white text). Opting in
+     to "light dark" made the browser paint dark UA backgrounds on form controls
+     in dark mode while Tailwind preflight kept text at the inherited near-black,
+     producing unreadable dark-on-dark inputs. */
+  color-scheme: light;
   color: rgba(0, 0, 0, 0.87);
   background-color: #ffffff;
 

@@ -12,7 +12,8 @@ dist
 dist-ssr
 *.local
 .env
-
+.env.local
+.env.production
 
 # Editor directories and files
 .vscode/*
@@ -25,5 +26,21 @@ dist-ssr
 *.sln
 *.sw?
 
+# Firebase
+.firebaserc
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
 
+# Functions
+functions/node_modules/
+functions/.env
+functions/.env.local
+
+# Service Account Keys
 serviceAccountKey.json
+**/serviceAccountKey.json
+
+# Allocation outputs
+seed_two/assignment-*.csv
+seed_two/assignment-*.md
