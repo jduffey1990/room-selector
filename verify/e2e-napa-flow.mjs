@@ -71,13 +71,25 @@ async function submitParticipant(email, prefOrder, adjustments = {}) {
   await page.close();
 }
 
-// One couple via the +copy mechanism the deployed v1 allocator expects,
-// plus two singles. 3 parties, 3 beds.
+// One couple via the +copy mechanism, plus two singles. 3 parties, 3 beds.
+// The default scenario's near-uniform bids happen to price identically under
+// v1 and the envy-free allocator; pass --discriminating for bids on which the
+// two mechanisms provably disagree (v1: couple->Main/ben->Guest/cara->Daybed
+// at +141.25/+68.75/-351.25; envy-free: couple->Guest/ben->Daybed/cara->Main
+// at +15.00/-305.00/+275.00), which proves which one is deployed.
+const discriminating = process.argv.includes('--discriminating');
 await submitParticipant('demo-anna@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove'],
     {'Main Bedroom': 25, 'Daybed Alcove': -25});
 await submitParticipant('demo-anna+copy@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove']);
-await submitParticipant('demo-ben@example.com', ['Guest Room', 'Main Bedroom', 'Daybed Alcove']);
-await submitParticipant('demo-cara@example.com', ['Daybed Alcove', 'Guest Room']);
+if (discriminating) {
+  await submitParticipant('demo-ben@example.com', ['Guest Room', 'Main Bedroom', 'Daybed Alcove'],
+      {'Main Bedroom': -100, 'Guest Room': 100});
+  await submitParticipant('demo-cara@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove'],
+      {'Main Bedroom': 100, 'Daybed Alcove': -100});
+} else {
+  await submitParticipant('demo-ben@example.com', ['Guest Room', 'Main Bedroom', 'Daybed Alcove']);
+  await submitParticipant('demo-cara@example.com', ['Daybed Alcove', 'Guest Room']);
+}
 
 // Admin: run allocation. confirm() then result alert() are auto-accepted and
 // recorded via the dialog handler.
