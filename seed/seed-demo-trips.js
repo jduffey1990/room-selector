@@ -9,12 +9,26 @@
  */
 
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({credential: admin.credential.cert(serviceAccount)});
 const db = admin.firestore();
 
 const DEMO_PREFIX = "[demo]";
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/**
+ * Same generator the createTrip function uses.
+ * @param {number} length Characters to generate.
+ * @return {string} The code.
+ */
+function generateCode(length) {
+  const bytes = crypto.randomBytes(length);
+  let out = "";
+  for (let i = 0; i < length; i++) out += ALPHABET[bytes[i] % ALPHABET.length];
+  return out;
+}
 
 // Bed price adjustments are relative to the per-person share: a master is worth
 // paying above the split, a floor spot is worth being paid to take.
@@ -72,9 +86,15 @@ async function clean() {
   for (const trip of demo) {
     const rooms = await db.collection("rooms").where("tripId", "==", trip.id).get();
     const subs = await db.collection("submissions").where("tripId", "==", trip.id).get();
+    const secrets = await trip.ref.collection("secret").get();
     const batch = db.batch();
     rooms.docs.forEach((d) => batch.delete(d.ref));
     subs.docs.forEach((d) => batch.delete(d.ref));
+    for (const sec of secrets.docs) {
+      const pc = sec.data().participantCode;
+      if (pc) batch.delete(db.collection("codes").doc(pc));
+      batch.delete(sec.ref);
+    }
     batch.delete(trip.ref);
     await batch.commit();
     console.log(`removed ${trip.data().name} (${rooms.size} rooms, ${subs.size} submissions)`);
@@ -90,6 +110,11 @@ async function seed() {
     const capacity = spec.rooms.reduce((n, r) => n + r.capacity, 0);
     const tripRef = db.collection("trips").doc();
 
+    // Must mirror what createTrip writes, or the admin dashboard and results
+    // view have no codes to verify against and return not-found.
+    const adminCode = generateCode(10);
+    const participantCode = generateCode(8);
+
     const batch = db.batch();
     batch.set(tripRef, {
       name: spec.name,
@@ -97,6 +122,10 @@ async function seed() {
       status: "collecting",
       createdAt: new Date().toISOString(),
     });
+    batch.set(tripRef.collection("secret").doc("codes"),
+        {adminCode, participantCode});
+    batch.set(db.collection("codes").doc(participantCode),
+        {tripId: tripRef.id, role: "participant"});
     for (const room of spec.rooms) {
       batch.set(db.collection("rooms").doc(), {tripId: tripRef.id, ...room});
     }
@@ -106,8 +135,9 @@ async function seed() {
         `${spec.name}\n` +
         `  $${spec.totalTripCost.toLocaleString()} / sleeps ${capacity} across ` +
         `${spec.rooms.length} beds = $${(spec.totalTripCost / capacity).toFixed(2)}/person\n` +
+        `  participant code: ${participantCode}   admin code: ${adminCode}\n` +
         `  participant: /#/trip/${tripRef.id}\n` +
-        `  admin:       /#/admin/${tripRef.id}\n`);
+        `  admin:       /#/admin/${tripRef.id}?code=${adminCode}\n`);
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "hosting": {
-    "//": "TODO at launch: flip \"public\" from hosting-placeholder to dist, after the Phase 1 lockdown lands. Build first with `npm run build`.",
-    "public": "hosting-placeholder",
+    "//": "Serves the built client. Run `npm run build` before deploying.",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",

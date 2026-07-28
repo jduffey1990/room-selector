@@ -44,17 +44,26 @@ limits. Do not restate that content here.
 
 | Thing | Status |
 | --- | --- |
-| The app | Runs locally. **Never deployed.** |
-| `firestore.rules` (deny-by-default) | Committed, **not deployed**. Live rules are still the old permissive set. |
-| Six callables in `functions/index.js` | Written, lint-clean, **never executed**. Not deployed. |
-| `allocateRooms` | Still runs the **v1 heuristic**, not the envy-free algorithm. |
-| Client | **Reads Firestore directly.** Incompatible with the committed rules. |
-| Hosting | Serving `hosting-placeholder/`, not the app. |
-| `roomselector5000.com` | Apex cert valid. **`www` has no cert** — see P0.1. |
-| Envy-free allocator | Exists at `seed/allocate-envyfree.js`, CLI only. Verified against one real trip. |
+| The app | **Deployed** — https://room-selector.web.app |
+| `firestore.rules` (deny-by-default) | **Deployed** |
+| Six callables | **Deployed**, verified end to end against production |
+| `allocateRooms` | Deployed, but still runs the **v1 heuristic**, not envy-free |
+| Client | On the callables. Only `trips`/`rooms` are read directly. |
+| Hosting | Serving the real app from `dist/` |
+| `roomselector5000.com` | Apex cert valid, but **redirects to `www`, which has no cert** — see P0.1 |
+| Envy-free allocator | `seed/allocate-envyfree.js`, CLI only. Not yet in `functions/`. |
+| Email verification | **None.** Anyone can submit as any address. See P1.1. |
 
-The single most important fact: **rules, functions, and client must deploy
-together.** Any two without the third is a broken app.
+Deploy note: **rules, functions, and client must deploy together.** Any two
+without the third is a broken app.
+
+Two production-only failure modes already hit once, worth remembering:
+- A 2nd-gen callable whose first deploy fails an IAM propagation race stays
+  **403 Forbidden** — a redeploy only *updates* it and does not add the public
+  invoker binding. Delete the function and deploy it fresh.
+- `vite.config.js` `base` must stay `/`. Setting it to a subpath makes the
+  hosting SPA rewrite swallow every asset request and serve `index.html`
+  instead, which renders a blank page with no console error.
 
 ---
 
@@ -78,36 +87,25 @@ together.** Any two without the third is a broken app.
 
 ## Roadmap
 
-### P0 — Nothing ships until these land
+### P0 — Deployment
 
-**0.1 Add the `www` custom domain** *(user action, ~5 min, Firebase console)*
-The apex has a valid cert, but it 301-redirects to `www`, and
+**0.1 Add the `www` custom domain** — *STILL OPEN, user action, ~5 min, Firebase
+console.* The apex has a valid cert, but it 301-redirects to `www`, and
 `www.roomselector5000.com` was never registered — so Firebase serves its default
-`firebaseapp.com` cert there, producing `ERR_CERT_COMMON_NAME_INVALID`. Add `www` as
-a second custom domain in Firebase Hosting.
+`firebaseapp.com` cert there, producing `ERR_CERT_COMMON_NAME_INVALID`. Until this
+is done the custom domain is unusable; `https://room-selector.web.app` works.
 
-**0.2 Refactor the client onto the callables** — *this is the blocker*
-The six components in `src/components/` read Firestore directly. Repoint them:
+**0.2 Client onto callables** — DONE.
+**0.3 Deploy rules + functions + hosting** — DONE.
+**0.4 Hosting serving `dist/`** — DONE.
 
-| Component | Callable |
-| --- | --- |
-| `TripCreator` | `createTrip` |
-| `TripJoin` | `joinTrip` |
-| `SubmissionForm` | `submitPreferences` |
-| `AdminDashboard` | `getAdminData` |
-| `ResultsView` | `getResults` |
+Verified in production: create → participant view → admin, with correct
+per-person math and zero console errors. A wrong admin code shows the unlock
+prompt and leaks nothing on a fresh load.
 
-Reads of `trips` and `rooms` stay direct — both remain publicly readable.
-`AdminDashboard` currently compares `adminCode` in the browser; that check moves
-server-side entirely.
-
-**0.3 Deploy together** — `firebase deploy` (rules + functions + hosting in one).
-
-**0.4 Flip hosting** — `firebase.json` `public`: `hosting-placeholder` → `dist`.
-
-> **Acceptance:** create → join → submit → admin → allocate works end to end against
-> the deployed deny-by-default rules, on both `roomselector5000.com` and
-> `www.roomselector5000.com`, with zero console errors.
+**Not yet exercised in production:** `submitPreferences` and `allocateRooms`
+through the UI. The callables were verified against the emulator over real
+Firestore, but no trip has been allocated end to end on the deployed stack.
 
 ---
 

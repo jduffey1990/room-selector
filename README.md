@@ -20,9 +20,8 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173/room-selector/** — the `/room-selector/` path
-matters, it comes from `base` in `vite.config.js`. Routing is `HashRouter`, so
-pages look like `#/create`.
+Open **http://localhost:5173**. Routing is `HashRouter`, so pages look
+like `#/create`.
 
 Firebase config lives in `src/firebase.js`. It is **not** a secret: the `apiKey`
 there is an identifier that ships in the bundle of every Firebase web app and
