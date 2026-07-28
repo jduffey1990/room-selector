@@ -7,6 +7,7 @@ const admin = require("firebase-admin");
 const {FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
 const {computeAllocation} = require("./allocation");
+const {sendResultsEmails} = require("./email");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -251,12 +252,17 @@ exports.getResults = onCall(opts, async (request) => {
   return {assignments: snap.docs.map((d) => ({id: d.id, ...d.data()}))};
 });
 
-exports.allocateRooms = onCall(opts, async (request) => {
+// The results email is the one non-optional notification (CLAUDE.md P1.2):
+// without it the organizer hand-delivers figures to everyone. The key is a
+// functions secret; when it is absent the send is skipped, not failed.
+const allocateOpts = {...opts, secrets: ["BREVO_API_KEY"]};
+
+exports.allocateRooms = onCall(allocateOpts, async (request) => {
   const {tripId, adminCode} = request.data || {};
 
   try {
     // Codes moved to trips/{id}/secret/codes, which no client can read.
-    await requireAdmin(tripId, adminCode);
+    const codes = await requireAdmin(tripId, adminCode);
 
     const tripDoc = await db.collection("trips").doc(tripId).get();
     if (!tripDoc.exists) {
@@ -300,10 +306,12 @@ exports.allocateRooms = onCall(opts, async (request) => {
     const basePerPerson = headcount > 0 ?
         (Number(trip.totalTripCost) || 0) / headcount : 0;
 
-    // Create new assignments
+    // Create new assignments. The same rows feed the results email, so what
+    // someone is told they owe is literally the committed figure.
+    const emailRows = [];
     for (const assignment of allAssignments) {
       const assignmentRef = db.collection("assignments").doc();
-      batch.set(assignmentRef, {
+      const row = {
         tripId: tripId,
         emails: assignment.emails,
         roomNames: assignment.beds,
@@ -311,8 +319,9 @@ exports.allocateRooms = onCall(opts, async (request) => {
         bedClass: assignment.bedClass,
         priceAdjustment: assignment.finalPerPerson,
         totalPerPerson: basePerPerson + assignment.finalPerPerson,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      };
+      batch.set(assignmentRef, {...row, createdAt: FieldValue.serverTimestamp()});
+      emailRows.push(row);
     }
 
     // Update trip status
@@ -324,12 +333,30 @@ exports.allocateRooms = onCall(opts, async (request) => {
 
     await batch.commit();
 
+    // Only after the batch commits: the allocation is the product, the email
+    // is a report about it. sendResultsEmails never rejects, but the extra
+    // guard means a future change to it still cannot fail an allocation.
+    let email = {sent: 0, failed: 0, skipped: true};
+    try {
+      email = await sendResultsEmails({
+        tripId,
+        tripName: trip.name,
+        participantCode: codes.participantCode,
+        assignments: emailRows,
+      });
+    } catch (mailError) {
+      console.error("Results email failed (allocation stands):", mailError);
+    }
+
     return {
       success: true,
       message: "Allocation complete",
       assignmentCount: allAssignments.length,
       coupleCount,
       singleCount,
+      emailsSent: email.sent,
+      emailsFailed: email.failed,
+      emailSkipped: email.skipped,
     };
   } catch (error) {
     console.error("Allocation error:", error);
