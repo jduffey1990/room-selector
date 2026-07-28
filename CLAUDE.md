@@ -153,22 +153,27 @@ domain to Auth's authorized domains. `submitPreferences` requires
 `request.auth` and takes the email from the verified token. Enforce for new
 submissions only; do not invalidate existing trips.
 
-**1.3 Custom sender domain — parked, owner-triggered.** Later, one
-deliberate DNS session (owner adds Brevo's SPF/DKIM + verification records
-at the registrar — additive TXT/CNAMEs, no risk to the site's A records)
-flips *both* streams to `noreply@roomselector5000.com`: auth emails via
-Firebase Auth's custom-SMTP setting pointed at Brevo, results emails already
-on Brevo. **Never half-configure this**: a custom sender without verified
-SPF/DKIM lands in spam, and a spam-foldered magic link is a locked-out
-user. Default sender until the DNS work is done, then fully verified —
-nothing in between.
+**1.3 Custom sender domain — DNS session DONE (owner, 2026-07-28).**
+`roomselector5000.com` is authenticated in the owner's Brevo account
+(Fox Dog Software Development, LLC): `brevo-code` TXT, DKIM CNAMEs
+(`brevo1`/`brevo2._domainkey`), branded link subdomain
+`mail.roomselector5000.com`, and a single merged DMARC record
+(`p=quarantine`, rua to both Brevo and GoDaddy) — all verified live on the
+authoritative NS; site A/CNAME records untouched. **Results emails send
+from `noreply@roomselector5000.com`.** Still parked, owner-triggered:
+flipping *auth* emails to Brevo via Firebase Auth's custom-SMTP setting —
+until then auth emails stay on the Firebase default sender (see 1.1).
 
 **1.2 Results email at finalization.** Without it the organizer hand-delivers
-results to 18 people. Send from `allocateRooms` after the batch commits, via a
-free-tier transactional provider's HTTP API — **Brevo** (300/day free) by
-default, Resend as alternate. API key from an env var / functions secret; if
-the key is absent, log and skip — **email failure must never fail an
-allocation**. Do **not** use the "Trigger Email" Firebase extension: Firebase
+results to 18 people. Send from `allocateRooms` after the batch commits, via
+Brevo's transactional HTTP API (`POST /v3/smtp/email`; 300/day free), sender
+`noreply@roomselector5000.com` (see 1.3). API key is set in the
+`BREVO_API_KEY` functions secret (done 2026-07-28); if the key is absent, log
+and skip — **email failure must never fail an allocation**. No Brevo
+templates or contact lists: email content lives in function code (voice
+rules are repo conventions), and participant emails are never synced to
+Brevo contacts (transactional-only — the P2.1/P3 privacy promises depend on
+this). Do **not** use the "Trigger Email" Firebase extension: Firebase
 Extensions is deprecated and shuts down March 2027.
 
 Content rules: the results email states each recipient's bed and exact dollar
@@ -269,7 +274,8 @@ callables plus dashboard UI:
   allocations, and to manipulation among strangers) and a pro tier.
 - **Small polish, grab when touching the client:** replace the default Vite
   favicon (`index.html` still points at `/vite.svg`) with a Selecta-bot head
-  SVG; custom sender domain (P1.3 above) once the owner does the DNS session.
+  SVG. (Custom sender domain: DNS done 2026-07-28 — see P1.3; only the
+  owner-triggered auth-email SMTP flip remains parked.)
 
 ---
 
