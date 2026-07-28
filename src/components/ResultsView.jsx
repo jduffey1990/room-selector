@@ -66,6 +66,23 @@ export default function ResultsView() {
     }
   };
 
+  // Derived from the loaded assignments. This was referenced by the JSX below
+  // but never computed, which crashed the component on its first successful
+  // render — results had never actually been viewable in production.
+  const stats = assignments.length > 0 ? (() => {
+    const totalPeople = assignments.reduce((n, a) => n + a.emails.length, 0);
+    const avgAdjustment = assignments.reduce(
+      (sum, a) => sum + a.priceAdjustment * a.emails.length, 0
+    ) / totalPeople;
+    const prices = assignments.map(a => a.totalPerPerson);
+    return {
+      totalPeople,
+      avgAdjustment,
+      priceRange: { min: Math.min(...prices), max: Math.max(...prices) },
+      uniqueBedClasses: new Set(assignments.map(a => a.bedClass)).size,
+    };
+  })() : null;
+
   if (needsCode) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -150,7 +167,10 @@ export default function ResultsView() {
           
           {trip.finalizedAt && (
             <p className="text-sm text-gray-500">
-              Finalized: {new Date(trip.finalizedAt).toLocaleString()}
+              {/* finalizedAt is a Firestore Timestamp when read via getDoc */}
+              Finalized: {(trip.finalizedAt.toDate
+                ? trip.finalizedAt.toDate()
+                : new Date(trip.finalizedAt)).toLocaleString()}
             </p>
           )}
         </div>
@@ -248,8 +268,10 @@ export default function ResultsView() {
                           <div 
                             className="h-full bg-gradient-to-r from-green-400 to-indigo-500"
                             style={{
-                              width: `${((assignment.totalPerPerson - stats.priceRange.min) / 
-                                       (stats.priceRange.max - stats.priceRange.min)) * 100}%`
+                              width: `${stats.priceRange.max > stats.priceRange.min
+                                ? ((assignment.totalPerPerson - stats.priceRange.min) /
+                                   (stats.priceRange.max - stats.priceRange.min)) * 100
+                                : 100}%`
                             }}
                           />
                         </div>
