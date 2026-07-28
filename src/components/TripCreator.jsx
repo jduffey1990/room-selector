@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../firebase';
+import { callFn } from '../firebase';
 import { PlusCircle, Trash2, Copy, Check } from 'lucide-react';
-
-function generateCode(length = 8) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed ambiguous chars
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
 
 export default function TripCreator() {
   const navigate = useNavigate();
@@ -71,41 +65,27 @@ export default function TripCreator() {
 
     setLoading(true);
     try {
-      const admin = generateCode(10);
-      const participant = generateCode(8);
-
-      // Create trip document
-      const tripRef = await addDoc(collection(db, 'trips'), {
+      // Codes are generated server-side with crypto.randomBytes and stored in
+      // a document no client can read.
+      const created = await callFn('createTrip', {
         name: tripName,
         totalTripCost: Number(totalCost) || 0,
-        adminCode: admin,
-        participantCode: participant,
-        status: 'collecting',
-        createdAt: new Date().toISOString(),
-      });
-
-      // Create room documents in batch
-      const batch = writeBatch(db);
-      rooms.forEach((room) => {
-        const roomRef = doc(collection(db, 'rooms'));
-        batch.set(roomRef, {
-          tripId: tripRef.id,
+        rooms: rooms.map((room) => ({
           name: room.name,
           description: room.description,
           basePrice: parseFloat(room.basePrice) || 0,
-          capacity: parseInt(room.capacity) || 1,
+          capacity: parseInt(room.capacity, 10) || 1,
           type: room.type,
-        });
+        })),
       });
-      await batch.commit();
 
-      setTripId(tripRef.id);
-      setAdminCode(admin);
-      setParticipantCode(participant);
+      setTripId(created.tripId);
+      setAdminCode(created.adminCode);
+      setParticipantCode(created.participantCode);
       setStep(3);
     } catch (error) {
       console.error('Error creating trip:', error);
-      alert('Failed to create trip. Please try again.');
+      alert(error?.message || 'Failed to create trip. Please try again.');
     } finally {
       setLoading(false);
     }

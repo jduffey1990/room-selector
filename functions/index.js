@@ -1,5 +1,10 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+// Import FieldValue from the modular entry point rather than reaching through
+// admin.firestore. The Functions emulator wraps firebase-admin to redirect
+// Firestore, and that proxy drops static properties, so
+// admin.firestore.FieldValue is undefined under emulation.
+const {FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
 const {computeAllocation} = require("./allocation");
 
@@ -84,7 +89,7 @@ exports.createTrip = onCall(opts, async (request) => {
     name: name.trim().slice(0, 120),
     totalTripCost: Number(totalTripCost) || 0,
     status: "collecting",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   batch.set(tripRef.collection("secret").doc("codes"),
@@ -290,7 +295,7 @@ exports.allocateRooms = onCall(opts, async (request) => {
         bedClass: assignment.bedClass,
         priceAdjustment: assignment.finalPerPerson,
         totalPerPerson: basePerPerson + assignment.finalPerPerson,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     }
 
@@ -298,7 +303,7 @@ exports.allocateRooms = onCall(opts, async (request) => {
     const tripRef = db.collection("trips").doc(tripId);
     batch.update(tripRef, {
       status: "finalized",
-      finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+      finalizedAt: FieldValue.serverTimestamp(),
     });
 
     await batch.commit();

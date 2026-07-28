@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { db } from '../firebase';
+import { callFn } from '../firebase';
 import { BarChart3, Download, Lock, Unlock, Loader, AlertCircle, Play } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -24,56 +22,46 @@ export default function AdminDashboard() {
     loadData();
   }, [tripId]);
 
-  const loadData = async () => {
-    try {
-      // Load trip
-      const tripDoc = await getDoc(doc(db, 'trips', tripId));
-      if (!tripDoc.exists()) {
-        setError('Trip not found');
-        setLoading(false);
-        return;
-      }
-      
-      const tripData = { id: tripDoc.id, ...tripDoc.data() };
-      setTrip(tripData);
-
-      // Auto-unlock if code in URL matches
-      if (searchParams.get('code') === tripData.adminCode) {
-        setShowEmails(true);
-      }
-
-      // Load rooms
-      const roomsRef = collection(db, 'rooms');
-      const roomsQuery = query(roomsRef, where('tripId', '==', tripId));
-      const roomsSnapshot = await getDocs(roomsQuery);
-      const roomsData = roomsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRooms(roomsData);
-
-      // Load submissions
-      const subsRef = collection(db, 'submissions');
-      const subsQuery = query(subsRef, where('tripId', '==', tripId));
-      const subsSnapshot = await getDocs(subsQuery);
-      const subsData = subsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setSubmissions(subsData);
-      
+  const loadData = async (codeOverride) => {
+    // Everything here is gated on the admin code, which getAdminData verifies
+    // server-side. Submissions and emails are unreadable by clients, so there
+    // is nothing to show until a valid code is supplied.
+    const code = codeOverride || searchParams.get('code') || adminKey;
+    if (!code) {
       setLoading(false);
+      return false;
+    }
+
+    try {
+      const data = await callFn('getAdminData', { tripId, adminCode: code });
+      setTrip(data.trip);
+      setRooms(data.rooms);
+      setSubmissions(data.submissions);
+      setShowEmails(true);
+      setError('');
+      return true;
     } catch (err) {
       console.error('Error loading data:', err);
-      setError('Failed to load trip data');
+      if (err?.code === 'functions/permission-denied') {
+        setShowEmails(false);
+      } else if (err?.code === 'functions/not-found') {
+        setError('Trip not found');
+      } else {
+        setError('Failed to load trip data');
+      }
+      return false;
+    } finally {
       setLoading(false);
     }
   };
 
-  const checkAdminKey = () => {
-    if (adminKey === trip.adminCode) {
-      setShowEmails(true);
-    } else {
-      alert('Incorrect admin key');
-    }
+  const checkAdminKey = async () => {
+    const ok = await loadData(adminKey.trim());
+    if (!ok) alert('Incorrect admin key');
   };
 
   const runAllocation = async () => {
-    if (!adminKey || adminKey !== trip.adminCode) {
+    if (!showEmails) {
       alert('Please unlock admin access first');
       return;
     }
@@ -86,35 +74,19 @@ export default function AdminDashboard() {
     setAllocationError('');
 
     try {
-      const functions = getFunctions();
-      const allocateRooms = httpsCallable(functions, 'allocateRooms');
-      
-      const result = await allocateRooms({
-        tripId: tripId,
-        adminCode: adminKey
-      });
-
-      if (result.data.success) {
-        alert(`✅ Allocation complete!\n\n${result.data.assignmentCount} assignments created\n${result.data.coupleCount} couples\n${result.data.singleCount} singles`);
-        
-        // Reload data to show updated status
-        await loadData();
-      }
+      const result = await callFn('allocateRooms', { tripId, adminCode: adminKey });
+      alert(
+        `Allocation complete!\n\n${result.assignmentCount} assignments created\n` +
+        `${result.coupleCount} couples\n${result.singleCount} singles`
+      );
+      await loadData();
     } catch (error) {
       console.error('Allocation error:', error);
-      let errorMessage = 'Failed to run allocation. ';
-      
-      if (error.code === 'functions/not-found') {
-        errorMessage += 'Cloud function not deployed. See setup instructions.';
-      } else if (error.code === 'functions/permission-denied') {
-        errorMessage += 'Invalid admin code.';
-      } else if (error.code === 'functions/failed-precondition') {
-        errorMessage += error.message;
-      } else {
-        errorMessage += error.message || 'Please try again.';
-      }
-      
-      setAllocationError(errorMessage);
+      const detail = {
+        'functions/not-found': 'Cloud function not deployed.',
+        'functions/permission-denied': 'Invalid admin code.',
+      }[error?.code] || error?.message || 'Please try again.';
+      setAllocationError(`Failed to run allocation. ${detail}`);
     } finally {
       setAllocating(false);
     }
@@ -212,6 +184,43 @@ export default function AdminDashboard() {
           <button
             onClick={() => navigate('/')}
             className="text-indigo-600 hover:text-indigo-800"
+          >
+            ← Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Nothing loads without a valid admin code — getAdminData is the only way to
+  // read this trip's submissions. Prompt rather than rendering a null trip.
+  if (!trip) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <Lock className="w-12 h-12 text-indigo-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin access</h2>
+          <p className="text-gray-600 mb-6">
+            Enter the admin code for this trip to view submissions.
+          </p>
+          <input
+            type="text"
+            value={adminKey}
+            onChange={(e) => setAdminKey(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && checkAdminKey()}
+            placeholder="ABC123XYZ9"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center font-mono tracking-widest mb-4 focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            onClick={checkAdminKey}
+            disabled={!adminKey.trim()}
+            className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          >
+            Unlock
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-4 text-indigo-600 hover:text-indigo-800 text-sm"
           >
             ← Back to Home
           </button>

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { callFn } from '../firebase';
 import { LogIn, AlertCircle } from 'lucide-react';
 
 export default function TripJoin() {
@@ -22,25 +21,19 @@ export default function TripJoin() {
     setError('');
 
     try {
-      // Search for trip with matching participant code
-      const tripsRef = collection(db, 'trips');
-      const q = query(tripsRef, where('participantCode', '==', code.trim().toUpperCase()));
-      const snapshot = await getDocs(q);
-
-      if (snapshot.empty) {
-        setError('Invalid trip code. Please check and try again.');
-        setLoading(false);
-        return;
-      }
-
-      const tripDoc = snapshot.docs[0];
-      const tripId = tripDoc.id;
-
-      // Navigate to submission form for this trip
+      // Codes are no longer queryable from the client — joinTrip resolves the
+      // code server-side against a collection nothing can read.
+      const { tripId } = await callFn('joinTrip', {
+        participantCode: code.trim().toUpperCase(),
+      });
       navigate(`/trip/${tripId}`);
     } catch (err) {
       console.error('Error joining trip:', err);
-      setError('Failed to join trip. Please try again.');
+      setError(
+        err?.code === 'functions/not-found'
+          ? 'Invalid trip code. Please check and try again.'
+          : 'Failed to join trip. Please try again.'
+      );
     } finally {
       setLoading(false);
     }

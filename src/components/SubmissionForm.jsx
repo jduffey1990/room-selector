@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, addDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, callFn } from '../firebase';
 import { BarChart3, CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader } from 'lucide-react';
 
 const PRICE_INCREMENT = 25;
@@ -122,40 +122,24 @@ export default function SubmissionForm() {
 
     setLoading(true);
     try {
-      // Check for duplicate email
-      const submissionsRef = collection(db, 'submissions');
-      const q = query(
-        submissionsRef,
-        where('tripId', '==', tripId),
-        where('email', '==', email.toLowerCase().trim())
-      );
-      const existing = await getDocs(q);
-
-      if (!existing.empty) {
-        alert('This email has already submitted preferences for this trip.');
-        setLoading(false);
-        return;
-      }
-
-      // Submit
-      await addDoc(collection(db, 'submissions'), {
+      // submitPreferences owns the duplicate-email check and re-validates the
+      // zero-sum rule server-side. The client checks above are convenience
+      // only — they are trivially bypassed with devtools.
+      await callFn('submitPreferences', {
         tripId,
         email: email.toLowerCase().trim(),
         preferences,
-        roomPrices: roomPrices.map(r => ({
-          id: r.id,
-          name: r.name,
-          price: r.price,
-          basePrice: r.basePrice
-        })),
-        totalAdjustment,
-        timestamp: new Date().toISOString(),
+        roomPrices: roomPrices.map(r => ({ id: r.id, price: r.price })),
       });
 
       setSubmitted(true);
     } catch (err) {
       console.error('Error submitting:', err);
-      alert('Failed to submit. Please try again.');
+      alert(
+        err?.code === 'functions/already-exists'
+          ? 'This email has already submitted preferences for this trip.'
+          : err?.message || 'Failed to submit. Please try again.'
+      );
     } finally {
       setLoading(false);
     }

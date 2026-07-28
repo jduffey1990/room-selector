@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, callFn } from '../firebase';
 import { Trophy, Users, DollarSign, Loader, AlertCircle, Home } from 'lucide-react';
 
 export default function ResultsView() {
@@ -12,60 +12,90 @@ export default function ResultsView() {
   const [trip, setTrip] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const [code, setCode] = useState(searchParams.get('code') || '');
+  const [needsCode, setNeedsCode] = useState(false);
 
   useEffect(() => {
     loadResults();
   }, [tripId]);
 
-  const loadResults = async () => {
+  const loadResults = async (codeOverride) => {
+    setLoading(true);
     try {
-      // Load trip
+      // The trip document stays publicly readable, so the name and status can
+      // render before anyone supplies a code.
       const tripDoc = await getDoc(doc(db, 'trips', tripId));
       if (!tripDoc.exists()) {
         setError('Trip not found');
-        setLoading(false);
-        return;
-      }
-      
-      const tripData = { id: tripDoc.id, ...tripDoc.data() };
-      setTrip(tripData);
-      
-      // Check if finalized
-      if (tripData.status !== 'finalized') {
-        setError('Results not yet available. Trip organizer needs to run allocation first.');
-        setLoading(false);
         return;
       }
 
-      // Load assignments
-      const assignmentsRef = collection(db, 'assignments');
-      const q = query(assignmentsRef, where('tripId', '==', tripId));
-      const assignmentsSnapshot = await getDocs(q);
-      const assignmentsData = assignmentsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      // Sort by total price (most expensive first)
-      assignmentsData.sort((a, b) => b.totalPerPerson - a.totalPerPerson);
-      
-      setAssignments(assignmentsData);
-      setLoading(false);
+      const tripData = { id: tripDoc.id, ...tripDoc.data() };
+      setTrip(tripData);
+
+      if (tripData.status !== 'finalized') {
+        setError('Results not yet available. Trip organizer needs to run allocation first.');
+        return;
+      }
+
+      // Assignments carry everyone's email, so they are gated behind a code.
+      const supplied = codeOverride || code;
+      if (!supplied) {
+        setNeedsCode(true);
+        return;
+      }
+
+      const data = await callFn('getResults', { tripId, code: supplied });
+      const sorted = [...data.assignments].sort(
+        (a, b) => b.totalPerPerson - a.totalPerPerson
+      );
+      setAssignments(sorted);
+      setNeedsCode(false);
+      setError('');
     } catch (err) {
       console.error('Error loading results:', err);
-      setError('Failed to load results');
+      if (err?.code === 'functions/permission-denied') {
+        setNeedsCode(true);
+        setError('That code did not match this trip.');
+      } else {
+        setError('Failed to load results');
+      }
+    } finally {
       setLoading(false);
     }
   };
 
-  // Calculate stats
-  const stats = assignments.length > 0 ? {
-    totalPeople: assignments.reduce((sum, a) => sum + a.emails.length, 0),
-    avgAdjustment: assignments.reduce((sum, a) => sum + a.priceAdjustment * a.emails.length, 0) / 
-                    assignments.reduce((sum, a) => sum + a.emails.length, 0),
-    uniqueBedClasses: [...new Set(assignments.map(a => a.bedClass))].length,
-    priceRange: {
-      min: Math.min(...assignments.map(a => a.totalPerPerson)),
-      max: Math.max(...assignments.map(a => a.totalPerPerson))
-    }
-  } : null;
+  if (needsCode) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <Trophy className="w-12 h-12 text-indigo-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {trip?.name || 'Trip results'}
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Enter your trip code to see who got which bed.
+          </p>
+          {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="ABC12345"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center font-mono tracking-widest mb-4 focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            onClick={() => loadResults(code.trim())}
+            disabled={!code.trim()}
+            className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          >
+            View Results
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
