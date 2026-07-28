@@ -27,9 +27,6 @@
  *    vacant bed's price and it is not reported.
  *  - More parties than beds, or a couple with no bed that sleeps two, is a
  *    typed failed-precondition error instead of a crash.
- *  - Three or more submissions sharing a base email is a hard error. v1
- *    silently dropped such groups on the floor — people vanished from the
- *    allocation.
  *  - A missing bid (a room added after someone submitted) falls back to the
  *    bed's base price. v1's single path produced NaN here and silently gave
  *    that person the first free bed.
@@ -47,8 +44,11 @@
  * The function verifies its own output (zero envy, zero budget) and throws
  * rather than return an allocation that fails the property being sold.
  *
- * Couple detection still uses the +copy email convention (P1.2 replaces the
- * detection mechanism; the one-agent-one-bed model stays).
+ * Couples (P1.2): a couple forms ONLY on mutual confirmation — submission A
+ * names B's email as partnerEmail and B names A's. Anything less (one-sided,
+ * dangling, or absent) is two singles. This replaces the old +copy email
+ * convention, which let anyone silently glue themselves to another
+ * submission by string-parsing addresses.
  */
 
 const {HttpsError} = require("firebase-functions/v2/https");
@@ -106,23 +106,34 @@ function computeAllocation(roomDocs, submissionDocs) {
   const NB = beds.length;
 
   // ---- Group submissions into unit-demand agents (a couple is one agent) --
-  const groups = new Map();
+  // Mutual confirmation only: A->B and B->A. Emails are unique per trip
+  // (submitPreferences rejects duplicates), so pairs are unambiguous — a
+  // submission can name at most one partner.
+  const byEmail = new Map();
+  for (const sub of submissionDocs) {
+    byEmail.set(String(sub.email || "").toLowerCase(), sub);
+  }
+  const memberGroups = [];
+  const consumed = new Set();
   for (const sub of submissionDocs) {
     const email = String(sub.email || "").toLowerCase();
-    const m = email.match(/^([^+@]+)(?:\+[^@]+)?(@.+)$/);
-    const key = m ? m[1] + m[2] : email;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(sub);
+    if (consumed.has(email)) continue;
+    consumed.add(email);
+    const members = [sub];
+    const partnerEmail = String(sub.partnerEmail || "").toLowerCase();
+    if (partnerEmail && partnerEmail !== email) {
+      const partner = byEmail.get(partnerEmail);
+      if (partner && !consumed.has(partnerEmail) &&
+          String(partner.partnerEmail || "").toLowerCase() === email) {
+        members.push(partner);
+        consumed.add(partnerEmail);
+      }
+    }
+    memberGroups.push(members);
   }
 
   const agents = [];
-  for (const [key, members] of groups.entries()) {
-    if (members.length > 2) {
-      throw new HttpsError(
-          "failed-precondition",
-          `${members.length} submissions share the base email ${key}. ` +
-          "A bed sleeps at most two; remove the extra submissions.");
-    }
+  for (const members of memberGroups) {
     // A couple's valuation is the average of the partners' bids, matching
     // the reference implementation.
     const values = beds.map((bed) => {

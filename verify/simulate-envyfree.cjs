@@ -117,8 +117,16 @@ function generateTrip(cfg, rnd) {
   const submissionDocs = [];
   let n = 0;
   for (let c = 0; c < couples; c++) {
-    submissionDocs.push(person(`p${n}@sim.test`));
-    submissionDocs.push(person(`p${n}+copy@sim.test`));
+    // Couples carry BOTH markers: mutual partnerEmail (what the production
+    // allocator uses, P1.2) and +copy-shaped emails (what the v1 baseline
+    // string-parses). The two conventions coincide on this data, so the
+    // baseline comparison and the shared audit grouping stay valid.
+    const a = person(`p${n}@sim.test`);
+    const b = person(`p${n}+copy@sim.test`);
+    a.partnerEmail = b.email;
+    b.partnerEmail = a.email;
+    submissionDocs.push(a);
+    submissionDocs.push(b);
     n++;
   }
   for (let s = 0; s < singles; s++) {

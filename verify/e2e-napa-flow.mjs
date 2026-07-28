@@ -8,8 +8,8 @@
  *     node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>
  *
  * Codes come from `node seed/seed-demo-trips.js` output. The script submits
- * four demo participants (one +copy couple, two singles), runs allocation as
- * admin, and loads results with the participant code. It runs a dark-mode
+ * four demo participants (one mutually-confirmed couple, two singles), runs
+ * allocation as admin, and loads results with the participant code. It runs a dark-mode
  * browser context and fails on any console error on any page — every
  * production bug so far has been invisible to HTTP status codes.
  */
@@ -40,7 +40,7 @@ context.on('page', (page) => {
 
 const card = (name) => `div.bg-white.rounded-lg.shadow-lg.overflow-hidden:has(h3:text-is("${name}"))`;
 
-async function submitParticipant(email, prefOrder, adjustments = {}) {
+async function submitParticipant(email, prefOrder, adjustments = {}, partner = null) {
   const page = await context.newPage();
   page.on('dialog', async (d) => {
     dialogs.push({email, type: d.type(), message: d.message()});
@@ -49,7 +49,8 @@ async function submitParticipant(email, prefOrder, adjustments = {}) {
   await page.goto(`${BASE}/#/trip/${tripId}`);
   await page.waitForSelector('h3:text-is("Main Bedroom")', {timeout: 30000});
 
-  await page.fill('input[type="email"]', email);
+  await page.locator('input[type="email"]').nth(0).fill(email);
+  if (partner) await page.locator('input[type="email"]').nth(1).fill(partner);
 
   for (const roomName of prefOrder) {
     await page.locator(`${card(roomName)} button:text-is("Add to Preferences")`).click();
@@ -71,7 +72,8 @@ async function submitParticipant(email, prefOrder, adjustments = {}) {
   await page.close();
 }
 
-// One couple via the +copy mechanism, plus two singles. 3 parties, 3 beds.
+// One couple via mutual partner confirmation (P1.2), plus two singles.
+// 3 parties, 3 beds.
 // The default scenario's near-uniform bids happen to price identically under
 // v1 and the envy-free allocator; pass --discriminating for bids on which the
 // two mechanisms provably disagree (v1: couple->Main/ben->Guest/cara->Daybed
@@ -79,8 +81,9 @@ async function submitParticipant(email, prefOrder, adjustments = {}) {
 // at +15.00/-305.00/+275.00), which proves which one is deployed.
 const discriminating = process.argv.includes('--discriminating');
 await submitParticipant('demo-anna@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove'],
-    {'Main Bedroom': 25, 'Daybed Alcove': -25});
-await submitParticipant('demo-anna+copy@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove']);
+    {'Main Bedroom': 25, 'Daybed Alcove': -25}, 'demo-alex@example.com');
+await submitParticipant('demo-alex@example.com', ['Main Bedroom', 'Guest Room', 'Daybed Alcove'],
+    {}, 'demo-anna@example.com');
 if (discriminating) {
   await submitParticipant('demo-ben@example.com', ['Guest Room', 'Main Bedroom', 'Daybed Alcove'],
       {'Main Bedroom': -100, 'Guest Room': 100});

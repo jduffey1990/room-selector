@@ -15,6 +15,7 @@ export default function SubmissionForm() {
   const [rooms, setRooms] = useState([]);
   
   const [email, setEmail] = useState('');
+  const [partnerEmail, setPartnerEmail] = useState('');
   const [roomPrices, setRoomPrices] = useState([]);
   const [preferences, setPreferences] = useState([]);
   const [submitted, setSubmitted] = useState(false);
@@ -115,6 +116,12 @@ export default function SubmissionForm() {
       return;
     }
 
+    if (partnerEmail.trim() &&
+        partnerEmail.trim().toLowerCase() === email.trim().toLowerCase()) {
+      alert('Partner email must be a different person');
+      return;
+    }
+
     if (!isBalanced) {
       alert('Price adjustments must sum to zero. Currently: ' + (totalAdjustment > 0 ? '+' : '') + totalAdjustment);
       return;
@@ -128,6 +135,7 @@ export default function SubmissionForm() {
       await callFn('submitPreferences', {
         tripId,
         email: email.toLowerCase().trim(),
+        partnerEmail: partnerEmail.toLowerCase().trim() || null,
         preferences,
         roomPrices: roomPrices.map(r => ({ id: r.id, price: r.price })),
       });
@@ -234,6 +242,22 @@ export default function SubmissionForm() {
             placeholder="your.email@example.com"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
           />
+
+          <label className="block text-sm font-medium text-gray-700 mb-2 mt-4">
+            I'm sharing a bed with… <span className="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="email"
+            value={partnerEmail}
+            onChange={(e) => setPartnerEmail(e.target.value)}
+            placeholder="partner.email@example.com"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+          <p className="text-sm text-gray-500 mt-2">
+            You'll be assigned one bed together and each pay its per-person
+            price. This only takes effect if they also submit and enter your
+            email here — otherwise you're both allocated as singles.
+          </p>
         </div>
 
         {/* Rooms */}

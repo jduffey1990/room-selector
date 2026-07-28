@@ -47,9 +47,23 @@ const refRows = fs.readFileSync(
 const roomDocs = Object.entries(BEDS).map(([id, b]) => ({
   id, name: id, basePrice: b.base, capacity: b.capacity, type: b.bedClass,
 }));
-const submissionDocs = JSON.parse(fs.readFileSync(
-    path.join(seedDir, "submissions-export.json"), "utf8"))
-    .map((s) => ({email: s.email, preferences: [], roomPrices: s.roomPrices}));
+// The January data used the +copy convention; production now forms couples
+// only on mutual partnerEmail confirmation (P1.2). Translate: each +copy
+// address and its base address name each other.
+const rawSubs = JSON.parse(fs.readFileSync(
+    path.join(seedDir, "submissions-export.json"), "utf8"));
+const allEmails = new Set(rawSubs.map((s) => s.email.toLowerCase()));
+const submissionDocs = rawSubs.map((s) => {
+  const low = s.email.toLowerCase();
+  let partnerEmail = null;
+  if (low.includes("+copy@")) {
+    partnerEmail = low.replace("+copy@", "@");
+  } else if (allEmails.has(low.replace("@", "+copy@"))) {
+    partnerEmail = low.replace("@", "+copy@");
+  }
+  return {email: s.email, partnerEmail, preferences: [],
+    roomPrices: s.roomPrices};
+});
 
 const {assignments, coupleCount, singleCount} =
     computeAllocation(roomDocs, submissionDocs);

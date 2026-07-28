@@ -423,7 +423,14 @@ export default function AdminDashboard() {
             <p className="text-gray-600 text-center py-8">No submissions yet</p>
           ) : (
             <div className="space-y-4">
-              {submissions.map((sub, idx) => (
+              {submissions.map((sub, idx) => {
+                // A couple only forms when both submissions name each other.
+                const partnerSub = sub.partnerEmail
+                  ? submissions.find(s => s.email === sub.partnerEmail)
+                  : null;
+                const partnerConfirmed =
+                  partnerSub && partnerSub.partnerEmail === sub.email;
+                return (
                 <div key={sub.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
                   <div className="flex justify-between items-start mb-3">
                     <div>
@@ -433,6 +440,13 @@ export default function AdminDashboard() {
                       <p className="text-sm text-gray-500">
                         {new Date(sub.timestamp).toLocaleString()}
                       </p>
+                      {sub.partnerEmail && showEmails && (
+                        <p className={`text-sm mt-1 ${partnerConfirmed ? 'text-purple-700' : 'text-amber-700'}`}>
+                          {partnerConfirmed
+                            ? `Sharing a bed with ${sub.partnerEmail} (confirmed)`
+                            : `Wants to share a bed with ${sub.partnerEmail} — not confirmed by them; both will be allocated as singles`}
+                        </p>
+                      )}
                     </div>
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                       sub.totalAdjustment === 0 
@@ -462,7 +476,8 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

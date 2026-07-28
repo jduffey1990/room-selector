@@ -126,11 +126,26 @@ exports.joinTrip = onCall(opts, async (request) => {
 });
 
 exports.submitPreferences = onCall(opts, async (request) => {
-  const {tripId, email, preferences, roomPrices} = request.data || {};
+  const {tripId, email, preferences, roomPrices, partnerEmail} =
+      request.data || {};
 
   const cleanEmail = String(email || "").toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     throw new HttpsError("invalid-argument", "Valid email required");
+  }
+
+  // Optional bed-sharing declaration (P1.2). A couple only forms when the
+  // named partner's submission names this email back — enforced at
+  // allocation time, stored verbatim here.
+  const cleanPartner = String(partnerEmail || "").toLowerCase().trim();
+  if (cleanPartner) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanPartner)) {
+      throw new HttpsError("invalid-argument", "Valid partner email required");
+    }
+    if (cleanPartner === cleanEmail) {
+      throw new HttpsError("invalid-argument",
+          "Partner email must be a different person");
+    }
   }
   if (!Array.isArray(preferences) || preferences.length === 0) {
     throw new HttpsError("invalid-argument", "Rank at least one room");
@@ -186,6 +201,7 @@ exports.submitPreferences = onCall(opts, async (request) => {
   await db.collection("submissions").add({
     tripId: tripSnap.id,
     email: cleanEmail,
+    partnerEmail: cleanPartner || null,
     preferences,
     roomPrices: roomPrices.map((rp) => ({
       id: rp.id,
