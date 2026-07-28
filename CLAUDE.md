@@ -76,12 +76,13 @@ limits. Do not restate that content here.
 | The app | **Deployed** — https://room-selector.web.app |
 | `firestore.rules` (deny-by-default) | **Deployed** |
 | Six callables | **Deployed**, verified end to end against production |
-| `allocateRooms` | Deployed, but still runs the **v1 heuristic**, not envy-free |
+| `allocateRooms` | **Envy-free allocator deployed** and proven in production on a discriminating input (2026-07-28) |
 | Client | On the callables. Only `trips`/`rooms` are read directly. |
 | Hosting | Serving the real app from `dist/` |
-| `roomselector5000.com` | Apex cert valid, but **redirects to `www`, which has no cert** — see P0.1 |
-| Envy-free allocator | `seed/allocate-envyfree.js`, CLI only. Not yet in `functions/`. |
-| Email verification | **None.** Anyone can submit as any address. See P1.1. |
+| `roomselector5000.com` | **Both hostnames serve valid certs**; apex 301s to `www`, which serves the app (verified 2026-07-28) |
+| Envy-free allocator | Ported to `functions/allocation.js`; `seed/allocate-envyfree.js` remains the reference. Regression + 576-trip simulation in `verify/`. |
+| Couples | Mutual `partnerEmail` confirmation (P1.2). The `+copy` hack no longer forms couples. |
+| Email verification | **None.** Anyone can submit as any address. Draft in `docs/drafts/P1.1-magic-link-auth.md`, blocked on an owner decision. |
 
 Deploy note: **rules, functions, and client must deploy together.** Any two
 without the third is a broken app.
