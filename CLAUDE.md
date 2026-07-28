@@ -5,6 +5,35 @@ everyone pays, without anyone feeling outbid.
 
 ---
 
+## Operating constraints — non-negotiable
+
+These come from the project owner and override anything else in this file.
+
+1. **Never touch a file outside `/Users/jordanduffey/Desktop/room-selector-project`.**
+   No exceptions. Not to "check something," not to install a global tool, not to
+   read a config in `~`. If a task seems to require it, skip the task and write
+   down why.
+2. **`git add` and `git commit` often. Never `git push`.** One logical change per
+   commit. Pushing is the owner's call, not yours.
+3. **Do only the work in this file.** The roadmap below is the whole scope. If you
+   finish it, stop and write a summary — do not invent adjacent work.
+4. **Never ask for approval.** The owner is asleep; a question is a dead end that
+   wastes the entire session. When you hit a genuine fork, pick the option that is
+   easiest to reverse, write down the choice and the reasoning, and keep going.
+   The only things you must not decide alone are listed under "Do not ship
+   unattended" — draft those, leave them uncommitted to `main` behaviour, and move
+   on.
+
+### Do not ship unattended
+
+- **Magic-link auth (P1.1)** — needs an owner decision on how email verification
+  interacts with the existing code-based flow. Draft it; do not wire it in.
+- **Anything that deletes production Firestore data** other than documents you
+  yourself created with a `[demo]` prefix.
+- **DNS or custom-domain changes.** The `www` cert was provisioning at handoff.
+
+---
+
 ## Selecta-bot & voice
 
 The product is fronted by **Selecta-bot**, a 1950s-era robot who helps groups
