@@ -1,6 +1,7 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const {computeAllocation} = require("./allocation");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -229,12 +230,6 @@ exports.getResults = onCall(opts, async (request) => {
   return {assignments: snap.docs.map((d) => ({id: d.id, ...d.data()}))};
 });
 
-// Scoring parameters
-const BASELINE_WEIGHT = 2.0;
-const BID_WEIGHT = 0.8;
-const PREF_WEIGHT = 25;
-const SIMILAR_PROPAGATION = 0.3;
-
 exports.allocateRooms = onCall(opts, async (request) => {
   const {tripId, adminCode} = request.data || {};
 
@@ -253,304 +248,16 @@ exports.allocateRooms = onCall(opts, async (request) => {
       throw new HttpsError("failed-precondition", "Trip already finalized");
     }
 
-    // Load rooms
-    const roomsSnapshot = await db.collection("rooms")
-        .where("tripId", "==", tripId)
-        .get();
+    const [roomsSnapshot, submissionsSnapshot] = await Promise.all([
+      db.collection("rooms").where("tripId", "==", tripId).get(),
+      db.collection("submissions").where("tripId", "==", tripId).get(),
+    ]);
 
-    const rooms = {};
-    const beds = [];
-    const doubleBeds = [];
-    const singleBeds = [];
-
-    roomsSnapshot.docs.forEach((doc) => {
-      const room = doc.data();
-      rooms[doc.id] = {
-        base: room.basePrice,
-        bedClass: room.type,
-        capacity: room.capacity,
-        name: room.name,
-      };
-      beds.push(doc.id);
-
-      if (room.capacity === 2) {
-        doubleBeds.push(doc.id);
-      } else {
-        singleBeds.push(doc.id);
-      }
-    });
-
-    // Utility function
-    const utility = (person, bed) => {
-      const {base, bedClass} = rooms[bed];
-      const bid = person.roomPrices[bed];
-      const bidDelta = bid - base;
-
-      let rank = person.preferences.indexOf(bed);
-      if (rank === -1) {
-        rank = person.preferences.length;
-      }
-
-      const maxRank = Math.max(person.preferences.length, beds.length);
-      const prefScore = (maxRank - rank) * PREF_WEIGHT;
-
-      let similarityBoost = 0;
-      if (person.preferences.length > 0) {
-        const topChoice = person.preferences[0];
-        const topBed = rooms[topChoice];
-
-        if (topBed && topBed.bedClass === bedClass) {
-          const topBidDelta = person.roomPrices[topChoice] - topBed.base;
-          similarityBoost = Math.max(0, topBidDelta) * SIMILAR_PROPAGATION;
-        }
-      }
-
-      return (
-        base * BASELINE_WEIGHT +
-        bidDelta * BID_WEIGHT +
-        prefScore +
-        similarityBoost
-      );
-    };
-
-    // Load submissions
-    const submissionsSnapshot = await db.collection("submissions")
-        .where("tripId", "==", tripId)
-        .get();
-
-    if (submissionsSnapshot.empty) {
-      throw new HttpsError("failed-precondition", "No submissions found");
-    }
-
-    const people = submissionsSnapshot.docs.map((doc) => {
-      const data = doc.data();
-      const roomPricesObj = {};
-      data.roomPrices.forEach((rp) => {
-        roomPricesObj[rp.id] = rp.price;
-      });
-
-      return {
-        email: data.email,
-        preferences: data.preferences,
-        roomPrices: roomPricesObj,
-      };
-    });
-
-    // Detect couples
-    const coupleMap = new Map();
-
-    for (const person of people) {
-      const match = person.email.match(/^([^+@]+)(?:\+[^@]+)?(@.+)$/);
-      const baseEmail = match ? match[1] + match[2] : person.email;
-
-      if (!coupleMap.has(baseEmail)) {
-        coupleMap.set(baseEmail, []);
-      }
-      coupleMap.get(baseEmail).push(person);
-    }
-
-    const couples = [];
-    const singles = [];
-
-    for (const [baseEmail, members] of coupleMap.entries()) {
-      if (members.length === 2) {
-        const primary = members.find((m) => !m.email.includes("+copy")) ||
-          members[0];
-        const secondary = members.find((m) => m.email.includes("+copy")) ||
-          members[1];
-
-        const avgRoomPrices = {};
-        for (const bed of beds) {
-          const price1 = primary.roomPrices[bed] || rooms[bed].base;
-          const price2 = secondary.roomPrices[bed] || rooms[bed].base;
-          avgRoomPrices[bed] = (price1 + price2) / 2;
-        }
-
-        couples.push({
-          id: baseEmail,
-          primary: primary.email,
-          secondary: secondary.email,
-          preferences: primary.preferences,
-          roomPrices: avgRoomPrices,
-        });
-      } else if (members.length === 1) {
-        singles.push(members[0]);
-      }
-    }
-
-    // Allocate couples
-    const usedBeds = new Set();
-    const coupleAssignments = [];
-
-    for (const couple of couples) {
-      let bestOption = null;
-
-      // Try double beds
-      for (const bed of doubleBeds) {
-        if (usedBeds.has(bed)) continue;
-
-        const score = utility(couple, bed);
-        if (!bestOption || score > bestOption.score) {
-          bestOption = {
-            type: "double",
-            beds: [bed],
-            score: score,
-          };
-        }
-      }
-
-      // Try two singles of same class
-      const singleBedsByClass = {};
-      for (const bed of singleBeds) {
-        if (usedBeds.has(bed)) continue;
-        const bedClass = rooms[bed].bedClass;
-        if (!singleBedsByClass[bedClass]) {
-          singleBedsByClass[bedClass] = [];
-        }
-        singleBedsByClass[bedClass].push(bed);
-      }
-
-      for (const availableBeds of Object.values(singleBedsByClass)) {
-        if (availableBeds.length >= 2) {
-          const bed1 = availableBeds[0];
-          const bed2 = availableBeds[1];
-
-          const score1 = utility(couple, bed1);
-          const score2 = utility(couple, bed2);
-          const avgScore = (score1 + score2) / 2;
-
-          if (!bestOption || avgScore > bestOption.score) {
-            bestOption = {
-              type: "double-single",
-              beds: [bed1, bed2],
-              score: avgScore,
-            };
-          }
-        }
-      }
-
-      if (!bestOption) continue;
-
-      for (const bed of bestOption.beds) {
-        usedBeds.add(bed);
-      }
-
-      coupleAssignments.push({
-        couple: couple,
-        beds: bestOption.beds,
-        type: bestOption.type,
-      });
-    }
-
-    // Allocate singles
-    const singleAssignments = [];
-
-    for (const single of singles) {
-      let bestBed = null;
-      let bestScore = null;
-
-      for (const bed of beds) {
-        if (usedBeds.has(bed)) continue;
-
-        const score = utility(single, bed);
-        if (bestScore === null || score > bestScore) {
-          bestBed = bed;
-          bestScore = score;
-        }
-      }
-
-      if (!bestBed) continue;
-
-      usedBeds.add(bestBed);
-      singleAssignments.push({
-        single: single,
-        bed: bestBed,
-      });
-    }
-
-    // Build assignments with prices
-    const allAssignments = [];
-
-    for (const ca of coupleAssignments) {
-      const couple = ca.couple;
-      const bedClass = rooms[ca.beds[0]].bedClass;
-
-      if (ca.type === "double") {
-        const price = couple.roomPrices[ca.beds[0]];
-
-        allAssignments.push({
-          emails: [couple.primary, couple.secondary],
-          beds: rooms[ca.beds[0]].name,
-          bedIds: ca.beds,
-          bedClass: bedClass,
-          pricePerPerson: price,
-        });
-      } else {
-        const price1 = couple.roomPrices[ca.beds[0]];
-        const price2 = couple.roomPrices[ca.beds[1]];
-
-        allAssignments.push({
-          emails: [couple.primary],
-          beds: rooms[ca.beds[0]].name,
-          bedIds: [ca.beds[0]],
-          bedClass: bedClass,
-          pricePerPerson: price1,
-        });
-
-        allAssignments.push({
-          emails: [couple.secondary],
-          beds: rooms[ca.beds[1]].name,
-          bedIds: [ca.beds[1]],
-          bedClass: bedClass,
-          pricePerPerson: price2,
-        });
-      }
-    }
-
-    for (const sa of singleAssignments) {
-      const single = sa.single;
-      const bed = sa.bed;
-      const bedClass = rooms[bed].bedClass;
-      const price = single.roomPrices[bed];
-
-      allAssignments.push({
-        emails: [single.email],
-        beds: rooms[bed].name,
-        bedIds: [bed],
-        bedClass: bedClass,
-        pricePerPerson: price,
-      });
-    }
-
-    // Normalize prices by bed class
-    const classPrices = {};
-    for (const a of allAssignments) {
-      if (!classPrices[a.bedClass]) {
-        classPrices[a.bedClass] = {total: 0, totalPeople: 0};
-      }
-      classPrices[a.bedClass].total += a.pricePerPerson * a.emails.length;
-      classPrices[a.bedClass].totalPeople += a.emails.length;
-    }
-
-    const classAverages = {};
-    for (const [bedClass, data] of Object.entries(classPrices)) {
-      classAverages[bedClass] = data.total / data.totalPeople;
-    }
-
-    for (const a of allAssignments) {
-      a.classAverage = classAverages[a.bedClass];
-    }
-
-    // Zero-sum adjustment
-    const totalDelta = allAssignments.reduce(
-        (sum, a) => sum + a.classAverage * a.emails.length, 0);
-    const totalPeople = allAssignments.reduce(
-        (sum, a) => sum + a.emails.length, 0);
-    const perPersonAdjustment = -totalDelta / totalPeople;
-
-    for (const a of allAssignments) {
-      a.finalPerPerson = a.classAverage + perPersonAdjustment;
-    }
+    // The algorithm itself lives in allocation.js and touches no I/O.
+    const {assignments: allAssignments, coupleCount, singleCount} =
+        computeAllocation(
+            roomsSnapshot.docs.map((d) => ({id: d.id, ...d.data()})),
+            submissionsSnapshot.docs.map((d) => d.data()));
 
     // Write to Firestore in batch
     const batch = db.batch();
@@ -592,8 +299,8 @@ exports.allocateRooms = onCall(opts, async (request) => {
       success: true,
       message: "Allocation complete",
       assignmentCount: allAssignments.length,
-      coupleCount: couples.length,
-      singleCount: singles.length,
+      coupleCount,
+      singleCount,
     };
   } catch (error) {
     console.error("Allocation error:", error);
