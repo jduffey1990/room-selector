@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 
 // This config is NOT a secret. The apiKey is an identifier that ships in the
@@ -20,14 +20,19 @@ export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 
-// VITE_USE_EMULATOR=true routes callables to `firebase emulators:start --only
-// functions`, so they can be exercised end to end before anything is deployed.
-// Firestore deliberately still points at production: the Firestore emulator
-// needs a Java runtime, and the functions emulator reaches real Firestore
-// through the Admin SDK anyway.
+// VITE_USE_EMULATOR=true routes callables and Firestore to
+// `firebase emulators:start`, so the app can be exercised end to end before
+// anything is deployed.
+//
+// Firestore must move with the callables once auth is in play: a browser
+// signed in against the Auth emulator holds a token signed `alg: none`, which
+// production Firestore correctly refuses. Mixing the two produces "Missing or
+// insufficient permissions" on reads that are in fact public. The emulator
+// loads firestore.rules, so local runs still exercise the real rules.
 if (import.meta.env.VITE_USE_EMULATOR === 'true') {
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-  console.info('[firebase] callables -> local emulator');
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  console.info('[firebase] callables + firestore -> local emulator');
 }
 
 /**

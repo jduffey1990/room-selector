@@ -98,10 +98,16 @@ async function runAt(label, viewport) {
   const inbox = await fetch(`${AUTH_EMU}/emulator/v1/projects/${PROJECT}/oobCodes`);
   const { oobCodes = [] } = await inbox.json();
   const mine = oobCodes.filter((c) => c.email === EMAIL).pop();
-  check(!!mine?.oobLink, 'a sign-in link was issued');
-  if (!mine?.oobLink) return context.close();
+  check(!!mine?.oobCode, 'a sign-in link was issued');
+  if (!mine?.oobCode) return context.close();
 
-  await page.goto(mine.oobLink);
+  // Built rather than followed: the emulator's own /emulator/action page
+  // applies the code before redirecting, so the app would receive one already
+  // spent. The real action handler passes it through. This URL is the shape
+  // the app actually sees on return, which is the part under test.
+  await page.goto(
+    `${BASE}/?apiKey=fake-api-key&mode=signIn&lang=en&oobCode=${mine.oobCode}`
+  );
   // Auto-submit on return is the point: the bids survived the round trip.
   await page.waitForSelector('text=Submitted!', { timeout: 30000 });
   check(true, 'clicking the link submitted automatically, with no retyping');
@@ -117,8 +123,9 @@ async function runAt(label, viewport) {
       `both ranked rooms survived the round trip (got ${data.preferences?.length})`);
   }
 
-  // Second submission from the same verified session must be refused.
-  await page.goto(`${BASE}/#/trip/${trip.id}`);
+  // Revisiting with a live session. A reload, not a goto: the app is already
+  // at this URL, so navigating to it would not remount anything.
+  await page.reload();
   await page.waitForSelector('h3:text-is("Main Bedroom")', { timeout: 30000 });
   const verifiedNote = page.locator('text=Verified — your submission is recorded under this address.');
   check(await verifiedNote.isVisible(), 'returning visitor is shown as already verified');

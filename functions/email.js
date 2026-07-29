@@ -67,6 +67,23 @@ function resultsUrl(tripId, participantCode) {
 }
 
 /**
+ * Normalises an assignment's bed name(s) to an array.
+ *
+ * computeAllocation emits `beds` as a single string (one party gets one bed;
+ * a couple gets one bed that sleeps two), and index.js stores it verbatim as
+ * `roomNames`. Treating that string as an array yields an empty list and an
+ * email that says "Your bed:" followed by nothing -- a silent 200 of exactly
+ * the kind this project keeps hitting.
+ * @param {string|!Array<string>} roomNames Stored bed name(s).
+ * @return {!Array<string>} One entry per bed.
+ */
+function bedNames(roomNames) {
+  const list = Array.isArray(roomNames) ? roomNames : [roomNames];
+  return list.filter((n) => n != null && String(n).trim() !== "")
+      .map((n) => String(n).trim());
+}
+
+/**
  * Renders one participant's results email.
  * @param {!Object} row Recipient's assignment details.
  * @param {string} row.tripName Trip name.
@@ -78,7 +95,7 @@ function resultsUrl(tripId, participantCode) {
  * @return {{subject: string, html: string, text: string}} Message parts.
  */
 function renderResults(row) {
-  const bedList = row.beds.join(" + ");
+  const bedList = bedNames(row.beds).join(" + ");
   const subject = `Your bed for ${row.tripName}: ${bedList}`;
 
   // Retro flourish is allowed in the heading and nowhere near the number.
@@ -226,11 +243,18 @@ async function sendResultsEmails(params) {
   const rows = [];
   for (const a of assignments) {
     const emails = Array.isArray(a.emails) ? a.emails : [];
+    const beds = bedNames(a.roomNames);
+    if (beds.length === 0) {
+      // The bed and the figure are the entire message. Sending one without a
+      // bed name would be worse than sending nothing at all.
+      console.error("[email] assignment has no bed name; skipping recipients");
+      continue;
+    }
     for (const email of emails) {
       rows.push({
         to: email,
         tripName,
-        beds: Array.isArray(a.roomNames) ? a.roomNames : [],
+        beds,
         totalPerPerson: a.totalPerPerson,
         // Only meaningful for a shared bed; names the other occupant so the
         // per-person figure cannot be misread as the pair's total.

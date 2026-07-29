@@ -44,6 +44,17 @@ const rows = [
   },
 ];
 
+// computeAllocation emits `beds` as a plain string, which index.js stores as
+// `roomNames`. This is the shape the sender actually receives in production.
+const REAL_ASSIGNMENT_SHAPE = [
+  { emails: ['a@real.test'], roomNames: 'Main Bedroom', totalPerPerson: 660 },
+  {
+    emails: ['b@real.test', 'c@real.test'],
+    roomNames: 'Guest Room',
+    totalPerPerson: 500,
+  },
+];
+
 const link = resultsUrl(TRIP_ID, CODE);
 let failures = 0;
 
@@ -96,6 +107,25 @@ for (const row of rows) {
   }
   console.log("");
 }
+
+// Regression: a string roomNames must not render an empty bed line. This is
+// the bug the sample data above hid -- every fixture here passes an array,
+// while computeAllocation never does.
+console.log("--- assignment shape emitted by computeAllocation");
+for (const a of REAL_ASSIGNMENT_SHAPE) {
+  const msg = renderResults({
+    tripName: "Napa Cabin",
+    beds: a.roomNames,
+    totalPerPerson: a.totalPerPerson,
+    sharingWith: a.emails.length > 1 ? a.emails[1] : null,
+    link,
+    participantCode: CODE,
+  });
+  check(msg.subject.includes(a.roomNames), `subject names "${a.roomNames}"`);
+  check(msg.text.includes(`Your bed: ${a.roomNames}`), "text names the bed");
+  check(!/Your bed:\s*$/m.test(msg.text), "bed line is never blank");
+}
+console.log("");
 
 const sendIndex = process.argv.indexOf("--send");
 if (sendIndex === -1) {
