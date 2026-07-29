@@ -11,7 +11,7 @@
  *     node verify/preview-results-email.cjs --send you@example.com
  */
 
-const {renderResults, resultsUrl, money} =
+const {renderResults, resultsUrl, money, isUndeliverable} =
   require("../functions/email.js");
 
 const TRIP_ID = "demoTrip123";
@@ -66,6 +66,14 @@ check(link.includes("/#/results/"), "link uses the HashRouter path");
 check(link.includes(`?code=${CODE}`), "code rides inside the fragment");
 check(money(612.4) === "$612.40", "money() prints exact cents");
 check(money(1234.5) === "$1,234.50", "money() groups thousands");
+
+// The [demo] fixtures are entirely example.com; sending to them would hard
+// bounce and damage a young sending domain.
+check(isUndeliverable("demo-anna@example.com"), "drops @example.com");
+check(isUndeliverable("a@foo.test"), "drops .test");
+check(isUndeliverable("a@foo.invalid"), "drops .invalid");
+check(!isUndeliverable("jo@gmail.com"), "keeps a real address");
+check(!isUndeliverable("jo@examples.com"), "keeps lookalike domain");
 console.log("");
 
 for (const row of rows) {

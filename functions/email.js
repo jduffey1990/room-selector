@@ -183,6 +183,21 @@ async function postToBrevo(apiKey, to, msg) {
   }
 }
 
+// Reserved documentation/test domains (RFC 2606, RFC 6761). The [demo]
+// fixtures and the e2e harness are full of these, and every one of them hard
+// bounces. Bounces are what wreck a young sending domain's reputation, so
+// they are dropped before they reach Brevo rather than being "sent".
+const UNDELIVERABLE = /@(example\.(com|net|org)|.*\.(test|invalid|localhost))$/;
+
+/**
+ * True for addresses that provably cannot receive mail.
+ * @param {string} email Address to check.
+ * @return {boolean} Whether the address is a reserved test address.
+ */
+function isUndeliverable(email) {
+  return UNDELIVERABLE.test(String(email || "").toLowerCase().trim());
+}
+
 /**
  * Emails every participant their own assignment.
  *
@@ -227,7 +242,13 @@ async function sendResultsEmails(params) {
     }
   }
 
-  const results = await Promise.allSettled(rows.map((row) =>
+  const deliverable = rows.filter((r) => !isUndeliverable(r.to));
+  const dropped = rows.length - deliverable.length;
+  if (dropped > 0) {
+    console.log(`[email] dropped ${dropped} reserved test address(es)`);
+  }
+
+  const results = await Promise.allSettled(deliverable.map((row) =>
     postToBrevo(apiKey, row.to, renderResults(row))));
 
   const failures = results.filter((r) => r.status === "rejected");
@@ -241,8 +262,11 @@ async function sendResultsEmails(params) {
   return {
     sent: results.length - failures.length,
     failed: failures.length,
+    dropped,
     skipped: false,
   };
 }
 
-module.exports = {sendResultsEmails, renderResults, resultsUrl, money};
+module.exports = {
+  sendResultsEmails, renderResults, resultsUrl, money, isUndeliverable,
+};
