@@ -127,10 +127,22 @@ exports.joinTrip = onCall(opts, async (request) => {
 });
 
 exports.submitPreferences = onCall(opts, async (request) => {
-  const {tripId, email, preferences, roomPrices, partnerEmail} =
-      request.data || {};
+  const {tripId, preferences, roomPrices, partnerEmail} = request.data || {};
 
-  const cleanEmail = String(email || "").toLowerCase().trim();
+  // Identity comes from the verified token, never from the request body
+  // (P1.1 Option A). This is structural rather than a check: there is no
+  // unverified path to reject because one cannot be expressed. An envy-free
+  // allocation over forged ballots is fairly allocating fiction.
+  const token = (request.auth && request.auth.token) || null;
+  const cleanEmail = String((token && token.email) || "").toLowerCase().trim();
+  if (!cleanEmail) {
+    throw new HttpsError("unauthenticated",
+        "Verify your email address before submitting");
+  }
+  if (token.email_verified === false) {
+    throw new HttpsError("permission-denied",
+        "Verify your email address before submitting");
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     throw new HttpsError("invalid-argument", "Valid email required");
   }

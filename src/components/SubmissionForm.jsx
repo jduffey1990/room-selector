@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { db, callFn } from '../firebase';
-import { CheckCircle2, ChevronDown, ChevronUp, DollarSign } from 'lucide-react';
+import { auth, sendVerificationLink, readPending, clearPending } from '../auth';
+import { CheckCircle2, ChevronDown, ChevronUp, DollarSign, Mail } from 'lucide-react';
 import SelectaBot, { BotLoading } from './SelectaBot';
 
 const PRICE_INCREMENT = 25;
@@ -23,9 +25,48 @@ export default function SubmissionForm() {
   const [error, setError] = useState('');
   const [expandedRoom, setExpandedRoom] = useState(null);
 
+  // Verified identity (P1.1). Until the address is verified there is nothing
+  // to submit with: submitPreferences reads the email from the token, so the
+  // field below is a claim, not a credential.
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [awaitingLink, setAwaitingLink] = useState('');
+  const [sendingLink, setSendingLink] = useState(false);
+  const resumed = useRef(false);
+
   useEffect(() => {
     loadTripData();
   }, [tripId]);
+
+  useEffect(() => onAuthStateChanged(auth, (u) => {
+    setUser(u);
+    setAuthReady(true);
+  }), []);
+
+  // Returning from the emailed link: the bids were stashed before the round
+  // trip and are submitted now, so clicking the link is the last step rather
+  // than the point where someone has to retype everything.
+  useEffect(() => {
+    if (!authReady || !user || rooms.length === 0 || resumed.current) return;
+    const pending = readPending();
+    if (!pending || pending.tripId !== tripId) return;
+
+    resumed.current = true;
+    setEmail(user.email || pending.email || '');
+    setPartnerEmail(pending.partnerEmail || '');
+    setPreferences(pending.preferences || []);
+    if (Array.isArray(pending.roomPrices)) {
+      const byId = new Map(pending.roomPrices.map((r) => [r.id, r.price]));
+      setRoomPrices((prev) =>
+        prev.map((r) => (byId.has(r.id) ? { ...r, price: byId.get(r.id) } : r))
+      );
+    }
+    postSubmission({
+      preferences: pending.preferences,
+      roomPrices: pending.roomPrices,
+      partnerEmail: pending.partnerEmail || null,
+    });
+  }, [authReady, user, rooms, tripId]);
 
   const loadTripData = async () => {
     try {
@@ -101,6 +142,31 @@ export default function SubmissionForm() {
     setPreferences(newPrefs);
   };
 
+  // Posts the submission. The email is deliberately absent from the payload:
+  // submitPreferences takes it from the verified token, so there is no field
+  // here that could name someone else.
+  const postSubmission = async (payload) => {
+    setLoading(true);
+    try {
+      // submitPreferences owns the duplicate-email check and re-validates the
+      // zero-sum rule server-side. The client checks are convenience only —
+      // they are trivially bypassed with devtools.
+      await callFn('submitPreferences', { tripId, ...payload });
+      clearPending();
+      setSubmitted(true);
+    } catch (err) {
+      console.error('Error submitting:', err);
+      clearPending();
+      alert(
+        err?.code === 'functions/already-exists'
+          ? 'This email has already submitted preferences for this trip.'
+          : err?.message || 'Failed to submit. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!email.trim()) {
       alert('Please enter your email');
@@ -128,29 +194,32 @@ export default function SubmissionForm() {
       return;
     }
 
-    setLoading(true);
-    try {
-      // submitPreferences owns the duplicate-email check and re-validates the
-      // zero-sum rule server-side. The client checks above are convenience
-      // only — they are trivially bypassed with devtools.
-      await callFn('submitPreferences', {
-        tripId,
-        email: email.toLowerCase().trim(),
-        partnerEmail: partnerEmail.toLowerCase().trim() || null,
-        preferences,
-        roomPrices: roomPrices.map(r => ({ id: r.id, price: r.price })),
-      });
+    const payload = {
+      partnerEmail: partnerEmail.toLowerCase().trim() || null,
+      preferences,
+      roomPrices: roomPrices.map(r => ({ id: r.id, price: r.price })),
+    };
 
-      setSubmitted(true);
+    // Already verified (repeat submitter, second trip, same browser): skip
+    // the round trip entirely.
+    if (user?.email) {
+      await postSubmission(payload);
+      return;
+    }
+
+    setSendingLink(true);
+    try {
+      await sendVerificationLink(email.toLowerCase().trim(), tripId, payload);
+      setAwaitingLink(email.toLowerCase().trim());
     } catch (err) {
-      console.error('Error submitting:', err);
+      console.error('Error sending verification link:', err);
       alert(
-        err?.code === 'functions/already-exists'
-          ? 'This email has already submitted preferences for this trip.'
-          : err?.message || 'Failed to submit. Please try again.'
+        err?.code === 'auth/invalid-email'
+          ? 'That email address does not look valid. Check it and try again.'
+          : 'Could not send the verification email. Check the address and try again.'
       );
     } finally {
-      setLoading(false);
+      setSendingLink(false);
     }
   };
 
@@ -168,6 +237,37 @@ export default function SubmissionForm() {
             className="text-indigo-600 hover:text-indigo-800"
           >
             ← Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (awaitingLink) {
+    return (
+      <div className="min-h-screen bg-selecta-cream flex items-center justify-center px-4">
+        <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8 max-w-md text-center">
+          <SelectaBot state="thinking" size={96} className="mx-auto mb-4" />
+          <h2 className="font-display text-3xl font-bold text-selecta-ink mb-2">
+            Check your email
+          </h2>
+          {/* Plain copy: this is an integrity step, and a person who does not
+              understand what to do next is a person who never submits. */}
+          <p className="text-selecta-slate mb-4">
+            We sent a verification link to <strong>{awaitingLink}</strong>.
+            Open it and your preferences are submitted automatically — your
+            rankings and prices are saved on this device until then.
+          </p>
+          <p className="text-sm text-selecta-slate mb-6">
+            Verifying your address is what stops anyone else from bidding in
+            your name. If the email hasn&rsquo;t arrived in a minute, check
+            your spam folder.
+          </p>
+          <button
+            onClick={() => setAwaitingLink('')}
+            className="text-selecta-teal hover:underline font-medium"
+          >
+            ← Use a different email
           </button>
         </div>
       </div>
@@ -231,11 +331,23 @@ export default function SubmissionForm() {
           </label>
           <input
             type="email"
-            value={email}
+            value={user?.email || email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={!!user?.email}
             placeholder="your.email@example.com"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-600"
           />
+          {user?.email ? (
+            <p className="text-sm text-green-700 mt-2 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" /> Verified — your submission
+              is recorded under this address.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 mt-2">
+              We&rsquo;ll email you a link to verify this address before your
+              preferences are recorded.
+            </p>
+          )}
 
           <label className="block text-sm font-medium text-gray-700 mb-2 mt-4">
             I'm sharing a bed with… <span className="text-gray-400 font-normal">(optional)</span>
@@ -358,10 +470,20 @@ export default function SubmissionForm() {
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6">
           <button
             onClick={handleSubmit}
-            disabled={!isBalanced || !email.trim() || preferences.length === 0}
-            className="w-full bg-selecta-teal text-white px-6 py-4 rounded-lg hover:bg-selecta-teal-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition font-bold text-lg"
+            disabled={
+              !isBalanced ||
+              !(user?.email || email.trim()) ||
+              preferences.length === 0 ||
+              sendingLink
+            }
+            className="w-full bg-selecta-teal text-white px-6 py-4 rounded-lg hover:bg-selecta-teal-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition font-bold text-lg flex items-center justify-center gap-2"
           >
-            Submit Preferences
+            {sendingLink && <Mail className="w-5 h-5 animate-pulse" />}
+            {sendingLink
+              ? 'Sending verification link…'
+              : user?.email
+                ? 'Submit Preferences'
+                : 'Verify Email & Submit'}
           </button>
           {!isBalanced && (
             <p className="text-sm text-red-600 mt-2 text-center">
