@@ -17,6 +17,7 @@
 
 import { chromium } from 'playwright';
 import { createRequire } from 'module';
+import { mkdirSync } from 'fs';
 
 const require = createRequire(import.meta.url);
 const admin = require('../seed/node_modules/firebase-admin');
@@ -25,7 +26,9 @@ const serviceAccount = require('../seed/serviceAccountKey.json');
 const PROJECT = 'room-selector';
 const AUTH_EMU = 'http://127.0.0.1:9099';
 const BASE = process.env.BASE || 'http://localhost:5173';
-const SHOT_DIR = 'verify/screenshots/';
+// Same gitignored scratch directory the production e2e uses.
+const SHOT_DIR = new URL('../.tmp-verify/', import.meta.url).pathname;
+mkdirSync(SHOT_DIR, { recursive: true });
 const EMAIL = 'demo-magiclink@example.com';
 
 if (!admin.apps.length) {
