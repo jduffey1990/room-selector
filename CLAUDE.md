@@ -9,11 +9,15 @@ everyone pays, without anyone feeling outbid.
 
 These come from the project owner and override anything else in this file.
 
-1. **Never touch a file outside `/Users/jordanduffey/Desktop/room-selector-project`.**
-   No exceptions. Not to "check something," not to install a global tool, not to
-   read a config in `~`. If a task seems to require it, skip the task and write
-   down why. (Playwright browsers are cached inside the repo:
-   `PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright`.)
+1. **Unattended sessions: never touch a file outside
+   `/Users/jordanduffey/Desktop/room-selector-project`.** This is containment
+   for work done while the owner is asleep, not a permanent rule — when the
+   owner is actively overseeing, they can lift it (they did on 2026-07-29 to
+   allow `brew install openjdk@21`, which the Firestore emulator needs).
+   Unattended, the rule stands: not to "check something," not to install a
+   global tool, not to read a config in `~`. If a task seems to require it,
+   skip the task and write down why. (Playwright browsers are cached inside
+   the repo: `PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright`.)
 2. **`git add` and `git commit` often. Never `git push`.** One logical change per
    commit. Pushing is the owner's call, not yours.
 3. **Do only the work in this file.** The roadmap below is the whole scope. If you
@@ -86,8 +90,8 @@ limits. Do not restate that content here.
 | `allocateRooms` | **Envy-free allocator**, proven in production on a discriminating input (2026-07-28) |
 | Couples | Mutual `partnerEmail` confirmation. The `+copy` hack no longer forms couples. |
 | Design system | Selecta-bot (cream/teal/coral, bot states), all six views verified at 390px, dark mode, zero console errors |
-| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`) |
-| Email | **None.** Anyone can submit as any address; results are hand-delivered. P1 fixes both. |
+| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
+| Email | **Built, not deployed.** P1.1 + P1.2 are committed and verified locally; deploying is blocked on Firebase Auth being enabled (see P1.1). Production today still accepts any address and hand-delivers results. |
 | Trip dates | **Not collected.** Blocks retention (P3). |
 | App Check / privacy policy / ads | None yet — P2. |
 
@@ -144,7 +148,21 @@ custom-domain certs live. Proofs live in `verify/`; theory in
 trip codes keep gating access; auth binds identity at the moment of
 submission. That draft is now the implementation reference.
 
-**1.1 Magic-link auth.** Firebase Auth email-link sign-in. **Sender decided
+**1.1 Magic-link auth — CODE COMPLETE, BLOCKED ON ONE CONSOLE ACTION.**
+Firebase Auth has never been initialized on this project (the Identity
+Toolkit admin API returns `CONFIGURATION_NOT_FOUND`). **Deploying the
+current `functions/index.js` before Auth is enabled rejects every
+submission on the live site.** Owner action, in the Firebase console:
+Authentication → Get started → Email/Password → enable, *and* toggle
+"Email link (passwordless sign-in)" → Save; then Settings → Authorized
+domains → add `www.roomselector5000.com` and `roomselector5000.com`.
+Left to the owner deliberately: it is a console-only action with a billing
+surface, on a project belonging to a business.
+
+Then: `npm run build && firebase deploy --only firestore,functions,hosting`,
+and run the production e2e (which needs the auth strategy below).
+
+Firebase Auth email-link sign-in. **Sender decided
 2026-07-28: launch with the default** `noreply@room-selector.firebaseapp.com`
 (Google-reputation deliverability, zero DNS). The *links inside* the email
 use `www.roomselector5000.com` — the hosting domain already serves the
@@ -180,9 +198,19 @@ Content rules: the results email states each recipient's bed and exact dollar
 figure literally (voice rules apply in full). Include the results link and
 trip code.
 
-Harness note: production e2e cannot click emailed links. Per the draft: use
-`FIREBASE_AUTH_EMULATOR_HOST` for local runs, and pick one of the two
-production-e2e strategies in the draft when wiring enforcement.
+Harness note: production e2e cannot click emailed links, so the journey is
+verified against the emulators — see README "Local stack". **The existing
+`verify/e2e-napa-flow.mjs` will fail once enforcement is deployed**: it
+types an email and submits, which the callable now refuses. Pick one of the
+two production-e2e strategies in the draft before relying on it again.
+
+Two traps found the hard way, both of which returned no error:
+- A single-use sign-in code plus React StrictMode's double-invoked effect
+  meant sign-in succeeded and *then* rendered "your link expired". Guard
+  with a ref, not a cancellation flag — the flag suppresses the state
+  update, not the second network call, and leaves the spinner up forever.
+- `computeAllocation` emits `beds` as a **string**, stored as `roomNames`.
+  Anything treating it as an array yields an empty bed name.
 
 > **Acceptance:** a submission without a verified session is rejected by the
 > callable (not just the UI); finalizing a trip emails every participant
