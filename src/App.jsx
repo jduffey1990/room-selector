@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './components/HomePage';
 import TripCreator from './components/TripCreator';
@@ -19,19 +19,28 @@ function App() {
   );
   const [linkError, setLinkError] = useState('');
 
-  useEffect(() => {
-    if (linkState !== 'completing') return;
-    let cancelled = false;
+  // A sign-in code is single-use, so completing it must happen exactly once.
+  // StrictMode double-invokes effects in development, and the second call was
+  // consuming an already-spent code: the first sign-in succeeded and the user
+  // was then shown "that link has expired". A cancellation flag does not help
+  // -- it suppresses the state update, not the second network call.
+  const completing = useRef(false);
 
+  useEffect(() => {
+    if (linkState !== 'completing' || completing.current) return;
+    completing.current = true;
+
+    // No cancellation flag here on purpose. StrictMode runs the cleanup
+    // between its two invocations, so a flag would discard the result of the
+    // one real sign-in and leave the spinner up forever. The ref above is what
+    // guarantees exactly-once; the outcome is always worth applying.
     (async () => {
       try {
         const pending = await completeSignIn();
-        if (cancelled) return;
         const target = pending?.tripId ? `/#/trip/${pending.tripId}` : '/#/';
         window.history.replaceState({}, '', target);
         setLinkState('idle');
       } catch (err) {
-        if (cancelled) return;
         console.error('Verification link failed:', err);
         // Plain and actionable: the two real causes are an expired link and
         // one already used, and the fix for both is to submit again.
@@ -43,10 +52,6 @@ function App() {
         setLinkState('error');
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [linkState]);
 
   if (linkState === 'completing') {
