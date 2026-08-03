@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { callFn } from '../firebase';
-import { BarChart3, Download, Lock, Loader, AlertCircle, Play } from 'lucide-react';
+import { BarChart3, Download, Lock, Loader, AlertCircle, Play, PlusCircle, Trash2 } from 'lucide-react';
 import { BotLoading } from './SelectaBot';
 
 export default function AdminDashboard() {
@@ -24,6 +24,12 @@ export default function AdminDashboard() {
   const [busy, setBusy] = useState('');
   const [lifecycleError, setLifecycleError] = useState('');
 
+  // P4 edit form. `draft` is null when the form is closed; opening it copies
+  // the loaded trip rather than binding to it, so cancelling really discards
+  // and a half-finished edit never reads back as the trip's actual state.
+  const [draft, setDraft] = useState(null);
+  const [editSaved, setEditSaved] = useState(false);
+
   /**
    * Runs one lifecycle callable and reloads.
    *
@@ -45,6 +51,69 @@ export default function AdminDashboard() {
       setLifecycleError(err?.message || `Could not ${op}. Try again.`);
     } finally {
       setBusy('');
+    }
+  };
+
+  const openEditor = () => {
+    setLifecycleError('');
+    setEditSaved(false);
+    setDraft({
+      name: trip.name || '',
+      totalTripCost: String(trip.totalTripCost ?? ''),
+      rooms: rooms.map((r) => ({
+        name: r.name || '',
+        description: r.description || '',
+        basePrice: String(r.basePrice ?? 0),
+        capacity: String(r.capacity ?? 1),
+        type: r.type || 'other',
+      })),
+    });
+  };
+
+  const updateDraftRoom = (index, field, value) => {
+    setDraft((d) => ({
+      ...d,
+      rooms: d.rooms.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
+    }));
+  };
+
+  // Same live split the create form shows. The organizer is editing the number
+  // everyone's share is built from, so the per-person figure has to move as
+  // they type rather than appear only after saving.
+  const draftCapacity = !draft ? 0 :
+    draft.rooms.reduce((sum, r) => sum + (parseInt(r.capacity, 10) || 1), 0);
+  const draftPerPerson = draftCapacity > 0 && Number(draft?.totalTripCost) > 0
+    ? Number(draft.totalTripCost) / draftCapacity
+    : 0;
+
+  // Mirrors updateTrip's server-side checks so the organizer is told what is
+  // wrong before a round trip. The callable enforces all of it for real.
+  const draftProblem = !draft ? '' :
+    !draft.name.trim() ? 'The trip needs a name.' :
+    !(Number(draft.totalTripCost) > 0) ? 'Total cost must be more than $0.' :
+    draft.rooms.length === 0 ? 'A trip needs at least one bed.' :
+    draft.rooms.length > 50 ? 'That is more than 50 beds.' :
+    draft.rooms.some((r) => !r.name.trim()) ? 'Every bed needs a name.' : '';
+
+  const saveDraft = async () => {
+    if (draftProblem) return;
+    const result = await lifecycle('save edits', 'updateTrip', '', {
+      name: draft.name.trim(),
+      totalTripCost: Number(draft.totalTripCost),
+      rooms: draft.rooms.map((r) => ({
+        name: r.name.trim(),
+        description: r.description.trim(),
+        basePrice: Number(r.basePrice) || 0,
+        capacity: Math.max(1, parseInt(r.capacity, 10) || 1),
+        type: r.type,
+      })),
+    });
+    // lifecycle() swallows the error into lifecycleError and returns undefined,
+    // so only close the form on a real success -- otherwise the organizer loses
+    // their edits to a failure they can no longer act on.
+    if (result?.success) {
+      setDraft(null);
+      setEditSaved(true);
     }
   };
 
@@ -343,6 +412,206 @@ export default function AdminDashboard() {
           {lifecycleError && (
             <p className="text-sm text-red-600 mt-3">{lifecycleError}</p>
           )}
+
+          {/* Edit trip and beds (P4). updateTrip refuses once anyone has
+              submitted: people rank beds by name and adjust prices against a
+              specific list, so changing that list underneath a ballot would
+              silently reinterpret what someone agreed to. Rather than hiding
+              the control and leaving the organizer to guess, it stays visible
+              and says why it is unavailable. */}
+          <div className="mt-5 pt-5 border-t border-selecta-ink/10">
+            <p className="text-sm font-medium text-selecta-ink mb-2">
+              Edit trip and beds
+            </p>
+
+            {submissions.length > 0 ? (
+              <p className="text-sm text-gray-600">
+                Not available — {submissions.length}{' '}
+                {submissions.length === 1 ? 'person has' : 'people have'} already
+                submitted. They ranked the beds as they are now, so editing the
+                list would change what they agreed to. Remove their submissions
+                below first if you really need to change the beds.
+              </p>
+            ) : !draft ? (
+              <>
+                <p className="text-sm text-gray-600 mb-3">
+                  Change the name, the total cost, or the bed list. Available
+                  because nobody has submitted yet.
+                </p>
+                {editSaved && (
+                  <p className="text-sm text-green-700 mb-3">Saved.</p>
+                )}
+                <button
+                  onClick={openEditor}
+                  disabled={!!busy}
+                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition text-sm"
+                >
+                  Edit trip and beds
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4 mt-3">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Trip name
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.name}
+                      onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total trip cost ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={draft.totalTripCost}
+                      onChange={(e) => setDraft({ ...draft, totalTripCost: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {draft.rooms.map((room, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 relative">
+                      {draft.rooms.length > 1 && (
+                        <button
+                          onClick={() => setDraft({
+                            ...draft,
+                            rooms: draft.rooms.filter((_, i) => i !== index),
+                          })}
+                          aria-label={`Remove ${room.name || `bed ${index + 1}`}`}
+                          className="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
+
+                      <div className="grid sm:grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Bed name *
+                          </label>
+                          <input
+                            type="text"
+                            value={room.name}
+                            onChange={(e) => updateDraftRoom(index, 'name', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Type
+                          </label>
+                          <select
+                            value={room.type}
+                            onChange={(e) => updateDraftRoom(index, 'type', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                          >
+                            <option value="king">King Bed</option>
+                            <option value="queen">Queen Bed</option>
+                            <option value="full">Full Bed</option>
+                            <option value="twin">Twin Bed</option>
+                            <option value="bunk">Bunk Bed</option>
+                            <option value="floor">Floor Spot</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Description
+                        </label>
+                        <input
+                          type="text"
+                          value={room.description}
+                          onChange={(e) => updateDraftRoom(index, 'description', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                        />
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Price adjustment ($)
+                          </label>
+                          <input
+                            type="number"
+                            value={room.basePrice}
+                            onChange={(e) => updateDraftRoom(index, 'basePrice', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Capacity
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={room.capacity}
+                            onChange={(e) => updateDraftRoom(index, 'capacity', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setDraft({
+                    ...draft,
+                    rooms: [...draft.rooms, {
+                      name: '', description: '', basePrice: '0', capacity: '1', type: 'king',
+                    }],
+                  })}
+                  className="w-full border-2 border-dashed border-gray-300 rounded-lg py-3 hover:border-selecta-teal hover:bg-selecta-teal-light transition flex items-center justify-center gap-2 text-gray-600 hover:text-selecta-teal-dark text-sm"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  Add another bed
+                </button>
+
+                {/* Stated literally: this is the number everyone's share is
+                    built from, so it does not get a Selecta-bot flourish. */}
+                <p className="text-sm text-gray-600">
+                  ${Number(draft.totalTripCost || 0).toLocaleString()} across{' '}
+                  {draftCapacity} {draftCapacity === 1 ? 'spot' : 'spots'} —{' '}
+                  <strong>${draftPerPerson.toFixed(2)}/person</strong> before bed
+                  adjustments. Recalculated from the real headcount when you run
+                  the allocation.
+                </p>
+
+                {draftProblem && (
+                  <p className="text-sm text-red-600">{draftProblem}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDraft(null)}
+                    disabled={!!busy}
+                    className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveDraft}
+                    disabled={!!busy || !!draftProblem}
+                    className="px-4 py-2 rounded-lg bg-selecta-teal text-white hover:bg-selecta-teal-dark disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
+                  >
+                    {busy === 'save edits' ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {submissions.length > 0 && (
             <div className="mt-5 pt-5 border-t border-selecta-ink/10">
