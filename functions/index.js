@@ -8,6 +8,7 @@ const {FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
 const {computeAllocation} = require("./allocation");
 const {sendResultsEmails} = require("./email");
+const listingImport = require("./listing-import");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -62,6 +63,65 @@ async function requireAdmin(tripId, adminCode) {
   }
   return codes;
 }
+
+// Listing import calls a paid API and, like createTrip, is unauthenticated --
+// so it is a spam target with a bill attached. maxInstances caps the blast
+// radius until App Check (P2.3) covers it properly.
+const extractOpts = {...opts, maxInstances: 3, secrets: ["ANTHROPIC_API_KEY"]};
+
+/**
+ * Reads a listing and returns a DRAFT trip. Writes nothing.
+ *
+ * The organizer reviews and edits, then submits through createTrip like any
+ * other trip. Nothing here is authoritative -- if this fails, the create form
+ * is unchanged and still works by hand, which is why every failure below is a
+ * plain message rather than something the UI has to special-case.
+ */
+exports.extractListing = onCall(extractOpts, async (request) => {
+  if (!listingImport.isConfigured()) {
+    throw new HttpsError("failed-precondition",
+        "Listing import is not set up yet. Add the beds by hand below.");
+  }
+
+  const {text, fileData, mediaType} = request.data || {};
+
+  if (fileData) {
+    if (typeof fileData !== "string") {
+      throw new HttpsError("invalid-argument", "Could not read that file");
+    }
+    if (!listingImport.SUPPORTED_MEDIA_TYPES.includes(mediaType)) {
+      throw new HttpsError("invalid-argument",
+          "Upload a PDF, or a screenshot as PNG or JPEG");
+    }
+    // base64 inflates by 4/3; compare decoded size so the limit means what
+    // the error message says it means.
+    if ((fileData.length * 3) / 4 > listingImport.MAX_FILE_BYTES) {
+      throw new HttpsError("invalid-argument",
+          "That file is larger than 3 MB. Upload just the pages listing the " +
+          "bedrooms.");
+    }
+  } else if (typeof text === "string" && text.trim()) {
+    if (text.length > listingImport.MAX_TEXT_CHARS) {
+      throw new HttpsError("invalid-argument",
+          "That listing is too long. Paste just the section describing the " +
+          "bedrooms.");
+    }
+  } else {
+    throw new HttpsError("invalid-argument",
+        "Paste the listing text or upload a file");
+  }
+
+  try {
+    return await listingImport.extractListing({text, fileData, mediaType});
+  } catch (err) {
+    // The full error goes to logs; the organizer gets something they can act
+    // on. A stack trace in a form field helps nobody.
+    console.error("Listing extraction failed:", err);
+    throw new HttpsError("internal", err instanceof Error && err.message ?
+        err.message :
+        "Could not read that listing. Add the beds by hand below.");
+  }
+});
 
 exports.createTrip = onCall(opts, async (request) => {
   const {name, totalTripCost, rooms} = request.data || {};

@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { callFn } from '../firebase';
-import { PlusCircle, Trash2, Copy, Check } from 'lucide-react';
+import { PlusCircle, Trash2, Copy, Check, Upload, Loader2 } from 'lucide-react';
+
+// Mirrors functions/listing-import.js. Checked here only to fail fast with a
+// useful message -- the callable enforces both for real.
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const ACCEPTED_UPLOADS = 'application/pdf,image/png,image/jpeg,image/gif,image/webp';
 
 export default function TripCreator() {
   const navigate = useNavigate();
@@ -33,6 +38,58 @@ export default function TripCreator() {
   const [participantCode, setParticipantCode] = useState('');
   const [copiedAdmin, setCopiedAdmin] = useState(false);
   const [copiedParticipant, setCopiedParticipant] = useState(false);
+
+  // Listing import (P0). Everything it produces is a draft the organizer edits
+  // before anything is created, so failures here are never fatal -- they just
+  // leave the form as it was.
+  const [listingText, setListingText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importNotes, setImportNotes] = useState('');
+  const [showImport, setShowImport] = useState(false);
+
+  const applyDraft = (draft) => {
+    if (draft.name) setTripName(draft.name);
+    if (draft.totalTripCost > 0) setTotalCost(String(draft.totalTripCost));
+    if (draft.rooms?.length) setRooms(draft.rooms);
+    setImportNotes(draft.notes || '');
+    // Straight to the bed list: reviewing what came back IS the next step, and
+    // dropping them on the name field would hide the part that needs checking.
+    if (draft.rooms?.length) setStep(2);
+  };
+
+  const runImport = async (payload) => {
+    setImporting(true);
+    setImportError('');
+    setImportNotes('');
+    try {
+      applyDraft(await callFn('extractListing', payload));
+    } catch (err) {
+      console.error('Listing import failed:', err);
+      setImportError(
+        err?.message || 'Could not read that listing. Add the beds by hand below.'
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const importFromFile = (file) => {
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setImportError('That file is larger than 3 MB. Upload just the pages listing the bedrooms.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () =>
+      setImportError('Could not read that file. Try pasting the listing text instead.');
+    reader.onload = () => {
+      // FileReader gives a data: URL; the API wants bare base64.
+      const base64 = String(reader.result).split(',')[1];
+      runImport({ fileData: base64, mediaType: file.type });
+    };
+    reader.readAsDataURL(file);
+  };
 
   const addRoom = () => {
     setRooms([...rooms, { name: '', description: '', basePrice: 0, capacity: 1, type: 'other' }]);
@@ -208,6 +265,73 @@ export default function TripCreator() {
 
           {step === 1 && (
             <div className="space-y-6">
+              {/* Listing import. Collapsed by default: typing a name and a
+                  number is faster than uploading a PDF, so this is the
+                  shortcut for people with a long listing, not the main path. */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                {!showImport ? (
+                  <button
+                    onClick={() => setShowImport(true)}
+                    className="flex items-center gap-2 text-sm font-medium text-indigo-700 hover:text-indigo-900 transition"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Have a listing? Let Selecta-bot read it for you
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm text-gray-700">
+                        Upload the listing or paste its text. Selecta-bot fills
+                        in the beds; you check them before anything is created.
+                      </p>
+                      <button
+                        onClick={() => setShowImport(false)}
+                        className="text-sm text-gray-500 hover:text-gray-700 shrink-0"
+                      >
+                        Hide
+                      </button>
+                    </div>
+
+                    <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border border-dashed border-gray-400 rounded-lg cursor-pointer hover:bg-white transition text-sm text-gray-700">
+                      <Upload className="w-4 h-4" />
+                      {importing ? 'Reading…' : 'Upload a PDF or screenshot'}
+                      <input
+                        type="file"
+                        accept={ACCEPTED_UPLOADS}
+                        disabled={importing}
+                        className="hidden"
+                        onChange={(e) => {
+                          importFromFile(e.target.files?.[0]);
+                          // Let the same file be picked again after an error.
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+
+                    <textarea
+                      value={listingText}
+                      onChange={(e) => setListingText(e.target.value)}
+                      placeholder="…or paste the listing text here"
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+
+                    <button
+                      onClick={() => runImport({ text: listingText })}
+                      disabled={importing || !listingText.trim()}
+                      className="flex items-center justify-center gap-2 w-full bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm"
+                    >
+                      {importing && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {importing ? 'Reading the listing…' : 'Read this listing'}
+                    </button>
+
+                    {importError && (
+                      <p className="text-sm text-red-600">{importError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Trip Name *
@@ -258,6 +382,18 @@ export default function TripCreator() {
 
           {step === 2 && (
             <div className="space-y-6">
+              {/* What the import could not work out. Stated plainly and up
+                  front -- an extraction the organizer trusts blindly is worse
+                  than no extraction, because the errors are invisible. */}
+              {importNotes && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-sm font-medium text-amber-900 mb-1">
+                    Check these before continuing
+                  </p>
+                  <p className="text-sm text-amber-800">{importNotes}</p>
+                </div>
+              )}
+
               {/* Live split: the whole point is that the organizer sees the
                   per-person number move as they add beds. */}
               <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex flex-wrap items-baseline justify-between gap-2">
