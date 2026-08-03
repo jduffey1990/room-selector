@@ -631,6 +631,16 @@ after a failure, and never says that a URL does nothing.
   free and the message is the only place a user learns the constraint.
 - Voice: this is instruction copy about a thing that costs money, so it is
   literal. Retro flourish stays in the panel heading.
+- **Noticed while specifying P5.5, not folded into it:** `extractListing`
+  returns `notes` — what the model could not work out — and
+  [TripCreator.jsx:61](src/components/TripCreator.jsx#L61) renders it in the
+  amber panel, but `createTrip` is never sent it. **It dies at submit.** So
+  "the listing said sleeps 12, I only found 10 beds" is visible for exactly
+  one screen and is gone from the trip forever, including from the organizer
+  who might reread it later. Persisting it onto the trip doc is a few lines;
+  whether that is wanted is a real question, not an obvious yes — it is a
+  machine's uncertainty note, and P2.1/P3 would then owe it a retention rule
+  like every other stored field. Owner's call.
 
 > **Acceptance:** a first-time organizer who pastes an Airbnb URL is told why
 > that cannot work and what to do instead, without an API call; the formats
@@ -766,9 +776,10 @@ rest of P5: the ballot should be easy to make say what the person means.
 
 **5.5 AI ranking assist (owner-requested 2026-08-03; promoted from "Later").**
 
-Someone who knows they want "a real bed near a bathroom, and I'd rather save
-money than have a view" still has to translate that into an ordering plus a
-set of adjustments summing to zero. The assist does that translation and hands
+Someone who knows they want "my own bathroom and a door that closes, and I'd
+rather save money than have a view" still has to translate that into an
+ordering plus a set of adjustments summing to zero. The assist does that
+translation and hands
 back a **draft the person edits**, in exactly the same shape as P0's listing
 import: a suggestion, never a commitment, and nothing is submitted until they
 submit it.
@@ -790,10 +801,44 @@ principle, and what actually holds it together is that these are friends who
 don't see each other's bids. An assistant that coached shading would be the
 thing that breaks that, and it would break it at scale.
 
+**Precondition — the whole feature rests on `rooms[].description`, and that
+field is optional.** Checked 2026-08-03 rather than assumed, because the
+answer decides whether this is worth building:
+
+- **What the trip actually stores per bed** is `name`, `description` (≤300
+  chars, [functions/index.js:201](functions/index.js#L201)), `basePrice`,
+  `capacity`, `type`. That is the entire ranking surface. There is no floor
+  plan, no adjacency, no room-to-room relationship of any kind.
+- **When descriptions are populated, they are exactly right.** The extractor's
+  schema asks for "anything that would change how much someone wants it:
+  ensuite, view, stairs, no window, shared with another bed", and the fixtures
+  bear it out — `Ensuite bath, fireplace, mountain view`, `Shares hall bath`,
+  `Open loft, no door`, `Under the stairs`. So "I want my own bathroom", "no
+  stairs", and "I need a door" are all answerable.
+- **Adjacency is not.** "A bed *near* a bathroom" cannot be answered — `Shares
+  hall bath` says a bath is shared, not where it is. Do not let the assist
+  imply otherwise; do not add a floor-plan model to make it possible.
+- **`createTrip` requires only `name`.** A hand-typed trip can have every
+  description empty, and then the assist has bed type, capacity, and the
+  organizer's `basePrice` and nothing else. It could still order king > bunk >
+  floor while sounding exactly as confident.
+
+So: **gate the assist on description coverage.** If most beds on the trip have
+an empty `description`, either don't offer it or say plainly that it is
+ordering by bed type alone. A confident ranking built on absent data is the
+same silent failure as every other bug in this repo — nothing errors, the
+ballot is just wrong.
+
 - New callable **`suggestRanking`**: free-text preferences + this trip's bed
   list in, `{preferences: [roomId], roomPrices: [{id, price}], notes}` out.
   (P5 adds two callables in total, this one and P5.2's
   `listParticipantNames` — whichever ships first is the 8th.)
+- **The assist is stateless, like `extractListing`.** No chat id, no
+  conversation id, no stored transcript, and the person's free-text
+  description is not persisted — it is a means to a draft, not a record.
+  Storing it would put an unstructured statement of what someone wants
+  next to the money they pay, for no allocation benefit, and hand P3
+  retention a field it has no rule for.
 - **Structured outputs (`output_config.format` + JSON schema), not ad-hoc tool
   calling** — same reasoning as P0: the response feeds a money form, so it must
   be parseable by construction rather than by hand-written repair.
