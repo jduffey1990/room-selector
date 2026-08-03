@@ -105,6 +105,18 @@ function newContext() {
         self.FIREBASE_APPCHECK_DEBUG_TOKEN = t;
       }, DEBUG_TOKEN);
     }
+    // P5.3's first-run explainer is a modal over the whole submission form,
+    // remembered in localStorage. Every participant here gets a fresh context
+    // (they must -- see the comment below), so storage is always empty and the
+    // dialog would cover the form for all of them. Mark it seen rather than
+    // dismissing it per page: this harness is testing the trip journey, and a
+    // click that exists only to clear a dialog is one more thing to go stale.
+    // verify/p5-guidance.mjs owns the dialog's own behaviour.
+    await c.addInitScript(() => {
+      try {
+        localStorage.setItem('rs5000.howItWorks.v1', '1');
+      } catch (err) { /* storage unavailable: dialog shows, click below clears it */ }
+    });
     c.on('page', (page) => {
       page.on('console', (msg) => {
         if (msg.type() === 'error' && !isHeadlessArtifact(msg.text())) {

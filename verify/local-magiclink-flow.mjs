@@ -63,6 +63,13 @@ const browser = await chromium.launch();
 async function runAt(label, viewport) {
   console.log(`\n=== ${label} (${viewport.width}x${viewport.height}), dark mode`);
   const context = await browser.newContext({ colorScheme: 'dark', viewport });
+  // P5.3's first-run explainer is a modal over this form and each context
+  // starts with empty storage, so without this it covers the page at both
+  // viewports and every click lands on the overlay. verify/p5-guidance.mjs
+  // owns the dialog's own behaviour; this harness is about the magic link.
+  await context.addInitScript(() => {
+    try { localStorage.setItem('rs5000.howItWorks.v1', '1'); } catch { /* ignore */ }
+  });
   context.on('page', (page) => {
     page.on('console', (m) => {
       if (m.type() === 'error') consoleErrors.push({ label, text: m.text() });

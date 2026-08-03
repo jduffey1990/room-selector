@@ -121,6 +121,13 @@ async function runAt(label, viewport, hasTouch) {
     // Before any page script, so App Check sees it at initialization.
     await context.addInitScript((t) => { self.FIREBASE_APPCHECK_DEBUG_TOKEN = t; }, DEBUG_TOKEN);
   }
+  // Mark the P5.3 explainer as already seen. Each context starts with empty
+  // storage, so otherwise the first-run dialog covers the form on every load
+  // and every click below hits the overlay instead of the control. This
+  // harness is about reordering; verify/p5-guidance.mjs owns the dialog.
+  await context.addInitScript(() => {
+    try { localStorage.setItem('rs5000.howItWorks.v1', '1'); } catch { /* ignore */ }
+  });
   const page = await context.newPage();
   page.on('console', (m) => {
     if (m.type() !== 'error') return;

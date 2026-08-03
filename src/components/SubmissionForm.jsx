@@ -4,9 +4,11 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, callFn } from '../firebase';
 import { auth, sendVerificationLink, readPending, clearPending } from '../auth';
-import { CheckCircle2, DollarSign, Mail } from 'lucide-react';
+import { CheckCircle2, DollarSign, HelpCircle, Mail } from 'lucide-react';
 import SelectaBot, { BotLoading } from './SelectaBot';
 import RankedList from './RankedList';
+import Tooltip from './Tooltip';
+import HowItWorks, { HOW_IT_WORKS_KEY } from './HowItWorks';
 
 const PRICE_INCREMENT = 25;
 
@@ -25,6 +27,26 @@ export default function SubmissionForm() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [expandedRoom, setExpandedRoom] = useState(null);
+
+  // Shown once, then reopenable from the header for good. An explanation a
+  // second-guessing person cannot get back is not much of an explanation.
+  // Read lazily so the storage hit happens on mount, not on every render;
+  // wrapped because Safari private browsing throws on localStorage access and
+  // an unreadable preference must not take the whole form down.
+  const [showHowItWorks, setShowHowItWorks] = useState(() => {
+    try {
+      return !localStorage.getItem(HOW_IT_WORKS_KEY);
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissHowItWorks = () => {
+    setShowHowItWorks(false);
+    try {
+      localStorage.setItem(HOW_IT_WORKS_KEY, '1');
+    } catch { /* unavailable — it just reappears next visit */ }
+  };
 
   // Verified identity (P1.1). Until the address is verified there is nothing
   // to submit with: submitPreferences reads the email from the token, so the
@@ -313,8 +335,27 @@ export default function SubmissionForm() {
     // "Excluded areas" as a second, account-side layer.
     <div className="min-h-screen bg-selecta-cream py-8 px-4" data-ad-free="submission">
       <div className="max-w-4xl mx-auto">
+        {showHowItWorks && <HowItWorks onClose={dismissHowItWorks} />}
+
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
-          <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2">{trip.name}</h1>
+          {/* Stacks on narrow screens. Side by side, a long trip name plus a
+              shrink-0 button pushed 40px past the viewport at 390px and gave
+              the whole page a horizontal scrollbar. */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+            <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2 min-w-0">{trip.name}</h1>
+            {/* Permanent, not just first-run: someone works out halfway down
+                the form that they do not understand the price rule, and needs
+                the explanation back. */}
+            <button
+              type="button"
+              onClick={() => setShowHowItWorks(true)}
+              data-testid="how-it-works-open"
+              className="self-start sm:shrink-0 flex items-center gap-1.5 text-sm font-medium text-selecta-teal hover:text-selecta-teal-dark rounded px-2 py-1 -ml-2 sm:ml-0 focus:outline-none focus:ring-2 focus:ring-selecta-teal"
+            >
+              <HelpCircle className="w-4 h-4" />
+              How this works
+            </button>
+          </div>
           <p className="text-selecta-slate">
             ${Number(trip.totalTripCost || 0).toLocaleString()} total • about $
             {tripPerPerson.toFixed(2)}/person before bed adjustments •{' '}
@@ -330,7 +371,15 @@ export default function SubmissionForm() {
             <div className="flex items-center gap-3">
               <DollarSign className={`w-6 h-6 ${isBalanced ? 'text-green-600' : 'text-red-600'}`} />
               <div>
-                <p className="font-semibold text-gray-900">Price Balance</p>
+                <p className="font-semibold text-gray-900 flex items-center gap-1.5">
+                  Price Balance
+                  <Tooltip label="Why must the adjustments balance?" align="left">
+                    Your adjustments have to add up to $0. Every dollar you add
+                    to one bed comes off another, so your total is always the
+                    even split — you are saying which beds are worth more
+                    relative to each other, not changing what the trip costs.
+                  </Tooltip>
+                </p>
                 <p className="text-sm text-gray-600">
                   {isBalanced ? 'Perfect! Your adjustments sum to zero.' : `Needs adjustment: ${totalAdjustment > 0 ? '+' : ''}$${totalAdjustment}`}
                 </p>
@@ -450,8 +499,14 @@ export default function SubmissionForm() {
 
                   {isExpanded && (
                     <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-700 mb-3">
-                        Adjust this room's price:
+                      <p className="text-sm text-gray-700 mb-3 flex items-center gap-1.5">
+                        Adjust this room&rsquo;s price:
+                        <Tooltip label="What does adjusting a price do?" align="left">
+                          This says what this bed is worth <em>to you</em>
+                          {' '}compared with the others. It does not change what
+                          the trip costs, and it is not a bid against anyone —
+                          whatever you add here has to come off another bed.
+                        </Tooltip>
                       </p>
                       <div className="flex items-center justify-between">
                         <button

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { GripVertical, ChevronUp, ChevronDown, X } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 /**
  * The ballot's running order, as an actual ordered list.
@@ -107,8 +108,13 @@ export default function RankedList({ items, onReorder, onRemove }) {
 
   return (
     <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
-      <h2 className="font-display text-xl font-bold text-selecta-ink mb-1">
+      <h2 className="font-display text-xl font-bold text-selecta-ink mb-1 flex items-center gap-2">
         Your ranking
+        <Tooltip label="How should I rank these?">
+          Order them the way you genuinely prefer them. Only include beds you
+          would actually accept — leaving one off is a real answer, and honest
+          ranking is what makes the final result defensible.
+        </Tooltip>
       </h2>
       <p className="text-sm text-selecta-slate mb-4">
         Best first. Drag a bed by its handle, or use the arrows.
