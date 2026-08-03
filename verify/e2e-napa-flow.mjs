@@ -96,14 +96,33 @@ async function submitParticipant(email, prefOrder, adjustments = {}, partner = n
     handleCodeInApp: true,
   });
   await page.goto(link);
-  // Wait for App.jsx's BotLoading to clear. 'detached' rather than a polled
-  // text check: if sign-in finishes before the first poll the label is already
-  // gone, and waiting for it to *appear* would hang on the fast path.
-  await page.waitForSelector('text=checking your verification link',
-      {state: 'detached', timeout: 30000});
+  // Wait for a POSITIVE signal that sign-in finished, not for a spinner to be
+  // absent. Waiting on the BotLoading label being 'detached' passes instantly
+  // when the label simply is not on screen yet, so the harness navigated away
+  // mid-sign-in and every participant silently stayed logged out.
+  //
+  // On success App.jsx replaceState's to '/#/' and renders the home route, so
+  // the hero heading is the signal. Race it against the error branch: a spent
+  // or invalid code otherwise shows up 30s later as a mystery timeout.
+  await Promise.race([
+    page.waitForSelector('h1:has-text("ROOM SELECTOR 5000")', {timeout: 30000}),
+    page.waitForSelector('text=verification link has expired', {timeout: 30000})
+        .then(() => {
+          throw new Error(`sign-in link rejected for ${email}`);
+        }),
+  ]);
 
   await page.goto(`${BASE}/#/trip/${tripId}`);
   await page.waitForSelector('h3:text-is("Main Bedroom")', {timeout: 30000});
+
+  // Assert the signed-in state explicitly. The submit button reads "Verify
+  // Email & Submit" when logged out and "Submit Preferences" when logged in,
+  // so a failed sign-in otherwise surfaces 30s later as an opaque locator
+  // timeout that says nothing about the cause.
+  const label = await page.locator('button:has-text("Submit")').first().innerText();
+  if (!label.includes('Submit Preferences')) {
+    throw new Error(`${email} is not signed in — submit button reads "${label}"`);
+  }
 
   // Own-email field renders disabled once signed in (value comes from the
   // token), so it is not filled here. The partner field is still the second
