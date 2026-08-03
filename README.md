@@ -11,7 +11,10 @@ so that **nobody prefers anyone else's bed at its price**.
 That property is the point. It means "I got outbid" has an answer: you were
 offered that bed at that price, and you preferred the money.
 
-No accounts. Access is by code.
+No accounts. Access is by code — and since August 2026, submitting also
+requires confirming your email address once, so a ballot can't be forged or
+cast twice. That's a one-time click, not a login: there's still nothing to
+sign up for.
 
 ## Run it locally
 
@@ -60,14 +63,29 @@ ceiling is `maxInstances` on each callable.
 node verify/regression-envyfree.cjs    # port matches the reference, 18/18
 node verify/simulate-envyfree.cjs      # 576 synthetic trips, zero envy
 node verify/preview-results-email.cjs  # renders the results email, offline
+
+# Extraction quality + cost. --sweep compares models on the same listing.
+ANTHROPIC_API_KEY=$(firebase functions:secrets:access ANTHROPIC_API_KEY) \
+  node verify/preview-listing-import.cjs [file.pdf] [--sweep]
+
+# Production e2e. APPCHECK_DEBUG_TOKEN is REQUIRED since App Check was
+# enforced — without it every submission is rejected and the run fails.
+APPCHECK_DEBUG_TOKEN=<registered debug token> \
 PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
   node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>
 ```
 
 The e2e drives the deployed site in a dark-mode browser and fails on any
 console error; codes come from `node seed/seed-demo-trips.js`
-(`--clean` first). Pass `--discriminating` to prove which allocator is
-deployed — v1 and envy-free price near-uniform bids identically.
+(`--clean` first, or you get duplicate fixtures). Pass `--discriminating` to
+prove which allocator is deployed — v1 and envy-free price near-uniform bids
+identically.
+
+**On the debug token:** App Check runs reCAPTCHA v3, which scores a headless
+browser far below the passing threshold — so the tool this repo verifies
+everything with is exactly what App Check exists to reject. A registered debug
+token is the supported way through. It bypasses App Check for whoever holds it,
+so it lives in the environment and is never committed.
 
 `preview-results-email.cjs --send <address>` posts one real message through
 Brevo, which is the only way to prove the sender domain is authenticated.
@@ -102,11 +120,15 @@ Firestore correctly refuses.
 src/
   components/            HomePage, TripCreator, TripJoin, SubmissionForm,
                          AdminDashboard, ResultsView, SelectaBot
+                         Footer, LegalPages (privacy + terms)
   firebase.js            client config — the only one, don't add a second
   auth.js                magic-link sign-in + the stashed submission
+  appcheck.js            App Check init; no-op without a site key
 functions/
   allocation.js          the envy-free allocator (production)
   email.js               results email via Brevo; never fails an allocation
+  listing-import.js      Claude extraction for the create form; degrades to off
+  trip-cascade.js        one cascade delete, shared by cron/seed/deleteTrip
   index.js               callable functions: all writes, all sensitive reads
 seed/
   allocate-envyfree.js   reference implementation of the allocator

@@ -114,6 +114,28 @@ Production failure modes already hit, worth remembering:
 - Every production bug so far returned HTTP 200 and logged nothing. Verify in a
   real browser, dark mode, asserting zero console errors.
 
+### Shipped (2026-08-03, one supervised session) — do not redo
+
+**P0 listing import**, **P1** (magic-link auth enforced + results email +
+inbox deliverability), **P2.1** privacy/terms, **P2.3** App Check on 6 of 7
+callables, **P3** retention (cron in dry run + trip dates + shared cascade),
+**P4 partial** (5 callables, dashboard UI for 4).
+
+Also fixed, found by the e2e on its first real run: **signed-in users could not
+submit at all.** `handleSubmit` guarded on the local `email` state, which is
+only populated on the unverified path, so every signed-in submission hit
+"Please enter your email" while the field showed their address. Invisible to
+hand-testing because first-time submitters were unaffected.
+
+Three things that cost time and are worth not relearning:
+- **`X-Goog-User-Project` is required on every Identity Toolkit call**, or it
+  bills the wrong project and misreports state as `CONFIGURATION_NOT_FOUND`.
+- **protobuf JSON omits false booleans**, so `passwordRequired: false` is
+  invisible in a response — verify passwordless with a live `sendOobCode`.
+- **updateMask on a message field replaces the whole submessage.**
+  `notification.sendEmail` as a mask would wipe all four email templates; name
+  the leaf fields. Same shape as `authorizedDomains` being a full replacement.
+
 ### Shipped (July 2026) — do not redo
 
 Envy-free allocator ported to `functions/allocation.js` and deployed;
@@ -523,10 +545,22 @@ being asked. A session isn't finished until its hand-off is.
 
 ## Start here (autonomous session)
 
-Work in this order: **P0 → P1.1 + 1.2 (deploy) → P1.4 → P2.1 → P2.3 → P3 → P4.**
-(P0 jumped the queue on 2026-08-03: the owner has a trip coming up. P1 is
-already code-complete and its Auth blocker is cleared, so it is a deploy
-plus verification, not a build.)
+**As of 2026-08-03 the roadmap above is shipped except for two P4 gaps and
+P2.2.** Start here:
+
+1. **Finish P4** — the only unblocked code work left.
+   - `updateTrip` has no dashboard form. The callable is deployed and
+     verified; an organizer simply cannot reach "edit trip/rooms".
+   - Exercise **reopen → re-allocate** end to end and confirm the result is
+     still envy-free. Reopen is verified to clear assignments and reset
+     status; the composition with `allocateRooms` is untested.
+2. **P2.2 AdSense** — blocked on the owner's account (in progress
+   2026-08-03). When the publisher ID arrives: `ads.txt` at the domain root
+   (a build-output change, not a paste), the AdSense snippet, then Auto ads
+   with vignettes on and in-page/anchored off. The ad constraints in P2.2 are
+   hard requirements, not preferences.
+
+Everything below is history unless something regresses.
 (P2.2 AdSense needs the owner's AdSense account — build the vignette config
 and footer links, but actual ad serving waits for the owner.)
 
