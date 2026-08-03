@@ -131,6 +131,15 @@ Three things worth not relearning:
 - Extracting the envy checker into `verify/envy-audit.cjs` was verified
   behaviour-preserving by regenerating `verify/simulation-results.md` and
   diffing: byte-identical apart from the wall-clock line.
+- **A verifier can fail by agreeing with nothing.** `envy-audit.cjs` grouped
+  couples by the simulation's `+copy` base-email convention, which the product
+  stopped producing when mutual `partnerEmail` confirmation shipped. On
+  production data it split every couple, valued the pair from one member's
+  bids, and **manufactured** an envy violation the allocator had not created —
+  intermittently, because which member survived depended on the unordered
+  `assignment.emails[0]`. The first green run was luck. Run a harness twice
+  before believing it, and check that its model of the inputs matches what the
+  product actually writes today.
 
 ### Shipped (2026-08-03, one supervised session) — do not redo
 
@@ -632,11 +641,6 @@ complete and P2.2's code half is done and verified. What is left is not code:
    "do not ship unattended" forbids deleting production data the session did
    not create. Options: delete them, or backfill a `tripId` so retention
    sweeps them normally.
-
-4. **Papercut, deliberately not fixed** (out of scope, one line): the admin
-   dashboard's "View Results" button navigates to `/results/:tripId` with no
-   `code`, so an organizer who just typed an admin code is immediately asked
-   for a code again.
 
 Rules of engagement while unattended:
 
