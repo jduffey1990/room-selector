@@ -24,13 +24,49 @@
  * @param {!Array} assignments Allocator output.
  * @return {!Object} Metrics.
  */
+/**
+ * Maps each submitter's email to the key of the party they belong to.
+ *
+ * A party is one person, or two who named each other. Mutual confirmation is
+ * the rule the product enforces, so a one-sided `partnerEmail` is deliberately
+ * NOT a couple here -- reading it as one would let this auditor disagree with
+ * the allocator about who the agents even are.
+ *
+ * Base-email normalization is kept alongside it because the simulation's
+ * fixtures pair `pN@sim.test` with `pN+copy@sim.test`. That was once the whole
+ * grouping rule, and it is why this function exists: real couples use two
+ * different addresses, so normalization alone silently split them, scored the
+ * pair from one member's bids, and invented envy that the allocator had not
+ * created. Worse, which member survived depended on `assignment.emails[0]`,
+ * which is unordered -- so the same allocation audited clean or dirty run to
+ * run.
+ *
+ * @param {!Array} submissionDocs Submissions.
+ * @returns {!Map<string, string>} lowercased email -> party key.
+ */
+function partyKeys(submissionDocs) {
+  const norm = (e) => e.toLowerCase().replace(/\+[^@]*@/, "@");
+  const byEmail = new Map(submissionDocs.map((s) => [s.email.toLowerCase(), s]));
+  const keys = new Map();
+  for (const s of submissionDocs) {
+    const me = s.email.toLowerCase();
+    const partner = (s.partnerEmail || "").toLowerCase();
+    const other = partner ? byEmail.get(partner) : null;
+    const mutual = other && (other.partnerEmail || "").toLowerCase() === me;
+    // Sorted, so both members derive the identical key from either side.
+    keys.set(me, mutual ? [norm(me), norm(partner)].sort().join("|") : norm(me));
+  }
+  return keys;
+}
+
 function audit(roomDocs, submissionDocs, assignments) {
   const bedById = new Map(roomDocs.map((r) => [r.id, r]));
-  // Party = base email group; per-person value = average of member bids,
-  // defaulting to base.
+  // Party = one person, or two who confirmed each other; per-person value =
+  // average of member bids, defaulting to base.
+  const keys = partyKeys(submissionDocs);
   const groups = new Map();
   for (const s of submissionDocs) {
-    const key = s.email.toLowerCase().replace(/\+[^@]*@/, "@");
+    const key = keys.get(s.email.toLowerCase());
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(s);
   }
@@ -47,7 +83,10 @@ function audit(roomDocs, submissionDocs, assignments) {
   // Where did each party land, and at what price?
   const placed = new Map(); // groupKey -> {bedId, price}
   for (const a of assignments) {
-    const key = a.emails[0].toLowerCase().replace(/\+[^@]*@/, "@");
+    // Resolved through the same party map, so a couple lands under one key
+    // whichever member happens to be first in the assignment's email list.
+    const first = a.emails[0].toLowerCase();
+    const key = keys.get(first) || first.replace(/\+[^@]*@/, "@");
     placed.set(key, {bedId: a.bedIds[0], price: a.finalPerPerson,
       size: a.emails.length});
   }
