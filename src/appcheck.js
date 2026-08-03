@@ -14,8 +14,21 @@ import { app } from './firebase';
 // console) mint incompatible keys and need different providers -- passing an
 // Enterprise key to ReCaptchaV3Provider fails at token-fetch time with a
 // generic error, so this is set deliberately rather than guessed.
-const PROVIDER = import.meta.env.VITE_RECAPTCHA_PROVIDER || 'v3'; // 'v3' | 'enterprise'
-const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
+// Confirmed classic v3, not Enterprise: the project's App Check config has a
+// populated recaptchaV3Config ("siteSecretSet": true), and the Enterprise
+// resource is a different path entirely. The two mint identical-looking 40-char
+// keys, so this was checked rather than inferred from the string.
+const PROVIDER = 'v3'; // 'v3' | 'enterprise'
+
+// Hardcoded on purpose, like the Firebase config in firebase.js. This key is
+// public — it ships in every bundle and grants nothing on its own; the secret
+// half lives in the project's App Check config and never appears here.
+//
+// Read from an env var it would be a footgun: Vite inlines env vars at BUILD
+// time, so any build that forgot the variable would silently produce a bundle
+// with App Check disabled. Once enforcement is on, that ships a site where
+// every callable fails, with nothing in the deploy log to suggest why.
+const SITE_KEY = '6LcH5XMtAAAAADQ57PkAzYE8a-3p-S1ROFxaeAip';
 
 /**
  * Starts App Check if a site key is configured.
