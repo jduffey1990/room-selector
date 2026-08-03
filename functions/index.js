@@ -17,7 +17,13 @@ const db = admin.firestore();
 
 // GCP budgets only alert -- they never cap spend. Capping concurrency is the
 // practical guard against a runaway loop or a scraper running up a bill.
-const opts = {maxInstances: 10};
+//
+// enforceAppCheck stays FALSE until tokens are confirmed arriving from real
+// browsers (P2.3). With it false the callables still VERIFY a token when one
+// is present -- request.app is populated -- but do not require one. Flipping
+// it to true before the client is sending tokens takes the whole site down,
+// and it looks completely fine in a deploy log.
+const opts = {maxInstances: 10, enforceAppCheck: false};
 
 // Ambiguous characters (0/O, 1/I/L) removed: these get read aloud and retyped.
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
