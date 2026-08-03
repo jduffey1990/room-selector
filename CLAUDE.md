@@ -351,8 +351,10 @@ stops auth email entirely.
 re-run.** Firebase stores that password in its own config; rotating it in Brevo
 leaves Firebase authenticating with a dead credential, and the failure is
 silent — `sendOobCode` still returns 200 and queues a send that never arrives.
-Rotated once already (owner, 2026-08-03). The order is always: rotate in Brevo
-→ re-run the PATCH → send a test `sendOobCode` and confirm it lands.
+Rotated once already (owner, 2026-08-03) and the full loop was verified: new
+key → re-run PATCH → test `sendOobCode` → **email arrived in the inbox**. The
+order is always: rotate in Brevo → re-run the PATCH → send a test and confirm
+it lands. Skipping the last step proves nothing; the failure is silent.
 
 **The Brevo SMTP key is a different credential from `BREVO_API_KEY`.** The
 transactional API key (used by `functions/email.js` for results emails) will
