@@ -18,12 +18,19 @@ const db = admin.firestore();
 // GCP budgets only alert -- they never cap spend. Capping concurrency is the
 // practical guard against a runaway loop or a scraper running up a bill.
 //
-// enforceAppCheck stays FALSE until tokens are confirmed arriving from real
-// browsers (P2.3). With it false the callables still VERIFY a token when one
-// is present -- request.app is populated -- but do not require one. Flipping
-// it to true before the client is sending tokens takes the whole site down,
-// and it looks completely fine in a deploy log.
-const opts = {maxInstances: 10, enforceAppCheck: false};
+// App Check ENFORCED (P2.3, 2026-08-03). Turned on only after a real browser
+// was confirmed exchanging tokens and the e2e harness was confirmed passing
+// with a registered debug token -- enforcing first would have broken the tool
+// that proves enforcement works.
+const opts = {maxInstances: 10, enforceAppCheck: true};
+
+// getResults is deliberately NOT enforced. It is what a participant opens from
+// the results email, possibly days later and often inside a mail client's
+// in-app browser, where reCAPTCHA scores poorly. Blocking someone from seeing
+// what they owe is a worse outcome than a scraper reading a results page that
+// was already shared with everyone on the trip. The spam-and-cost targets are
+// createTrip and extractListing, and both are enforced.
+const openOpts = {...opts, enforceAppCheck: false};
 
 // Ambiguous characters (0/O, 1/I/L) removed: these get read aloud and retyped.
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -333,7 +340,7 @@ exports.getAdminData = onCall(opts, async (request) => {
   };
 });
 
-exports.getResults = onCall(opts, async (request) => {
+exports.getResults = onCall(openOpts, async (request) => {
   const {tripId, code} = request.data || {};
   if (!tripId || !code) {
     throw new HttpsError("invalid-argument", "tripId and code required");

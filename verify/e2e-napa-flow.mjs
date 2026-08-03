@@ -48,6 +48,27 @@ const SHOT_DIR = new URL('../.tmp-verify/', import.meta.url).pathname;
 mkdirSync(SHOT_DIR, {recursive: true});
 
 const consoleErrors = [];
+
+/**
+ * Errors caused by running headless rather than by the app.
+ *
+ * Deliberately narrow. The zero-console-errors gate is the most valuable
+ * assertion in this harness -- every production bug in this repo so far
+ * returned HTTP 200 and logged nothing -- so widening this list to quiet a
+ * failure would remove the thing that catches them.
+ *
+ * `requestStorageAccess: Permission denied` comes from the reCAPTCHA iframe
+ * App Check loads: headless Chromium refuses third-party storage access. It
+ * appeared only when App Check shipped; every run before that was clean, and
+ * the owner's real browser shows no such error. If it ever appears in a real
+ * browser, delete this and treat it as a bug.
+ *
+ * @param {string} text The console message.
+ * @returns {boolean} True if this is a known headless-only artifact.
+ */
+function isHeadlessArtifact(text) {
+  return text.includes('requestStorageAccess: Permission denied');
+}
 const dialogs = [];
 
 const browser = await chromium.launch();
@@ -86,7 +107,9 @@ function newContext() {
     }
     c.on('page', (page) => {
       page.on('console', (msg) => {
-        if (msg.type() === 'error') consoleErrors.push({url: page.url(), text: msg.text()});
+        if (msg.type() === 'error' && !isHeadlessArtifact(msg.text())) {
+          consoleErrors.push({url: page.url(), text: msg.text()});
+        }
       });
       page.on('pageerror', (err) => consoleErrors.push({url: page.url(), text: `pageerror: ${err.message}`}));
     });

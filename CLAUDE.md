@@ -97,7 +97,8 @@ limits. Do not restate that content here.
 | Trip dates | **Collected 2026-08-03** (optional `startDate`/`endDate`, YYYY-MM-DD strings on the trip doc). |
 | Retention (P3) | **Cron deployed, DRY RUN.** `purgeExpiredTrips`, monthly 09:00 UTC on the 1st. Deletes nothing until `RETENTION_ENABLED=true`. Cascade extracted to `functions/trip-cascade.js` and shared with `seed --clean`. |
 | Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
-| App Check / ads | None yet — P2.2, P2.3. |
+| App Check | **ENFORCED 2026-08-03** (P2.3) on six of seven callables via classic reCAPTCHA v3. `getResults` deliberately open — it is opened from the results email, often days later in a mail client's in-app browser where reCAPTCHA scores poorly, and blocking someone from seeing what they owe is worse than a scraper reading an already-shared page. Raw `curl` → 401 on the six, 400 on `getResults`. **The e2e harness needs `APPCHECK_DEBUG_TOKEN` (registered debug token, never committed) or every submission is rejected.** |
+| Ads | None yet — P2.2, needs the owner's AdSense account. |
 
 Deploy note: **rules, functions, and client must deploy together**
 (`firebase deploy --only firestore,functions,hosting`, after `npm run build`).
