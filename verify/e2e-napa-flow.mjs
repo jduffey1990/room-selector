@@ -59,9 +59,31 @@ const browser = await chromium.launch();
  * origin, so sharing one context would sign every participant in as whoever
  * signed in first, and the trip would be allocated over one ballot repeated.
  */
+// App Check (P2.3) rejects headless browsers: reCAPTCHA v3 scores them far
+// below the project's minValidScore, so the token exchange 403s. A registered
+// debug token is the supported way for an automated client to pass.
+//
+// Injected via addInitScript rather than shipped in the bundle, so production
+// carries no bypass. It runs before any page script, which matters because
+// startAppCheck() fires at module load in main.jsx.
+//
+// Read from the environment and NEVER committed -- this token bypasses App
+// Check for whoever holds it:
+//   APPCHECK_DEBUG_TOKEN=... node verify/e2e-napa-flow.mjs ...
+const DEBUG_TOKEN = process.env.APPCHECK_DEBUG_TOKEN || '';
+if (!DEBUG_TOKEN) {
+  console.warn('APPCHECK_DEBUG_TOKEN not set — fine until App Check is ' +
+      'enforced, then every submission here will be rejected.');
+}
+
 function newContext() {
   const ctx = browser.newContext({colorScheme: 'dark', viewport: {width: 1280, height: 900}});
-  return ctx.then((c) => {
+  return ctx.then(async (c) => {
+    if (DEBUG_TOKEN) {
+      await c.addInitScript((t) => {
+        self.FIREBASE_APPCHECK_DEBUG_TOKEN = t;
+      }, DEBUG_TOKEN);
+    }
     c.on('page', (page) => {
       page.on('console', (msg) => {
         if (msg.type() === 'error') consoleErrors.push({url: page.url(), text: msg.text()});
