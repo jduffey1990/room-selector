@@ -5,11 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- AdSense site verification. Deliberately the meta tag and NOT the
-         adsbygoogle.js snippet: the snippet in <head> would load ad code on
-         every route of this SPA, including the submission form and the results
-         page, and P2.2 forbids ads in money or fairness UI. The meta tag proves
-         ownership without shipping any ad code. The loader is injected at
-         runtime, per route, by src/ads.js. -->
+         loader snippet: a script in <head> would load ad code on every route
+         of this SPA, including the submission form and the results page, and
+         P2.2 forbids ads in money or fairness UI. The meta tag proves
+         ownership while shipping no ad code at all. The loader is injected at
+         runtime, per route, by src/ads.js -- which is also why grepping the
+         served HTML for the loader filename must come back empty. -->
     <meta name="google-adsense-account" content="ca-pub-6539967757276332" />
     <title>Room Selector 5000</title>
   </head>
