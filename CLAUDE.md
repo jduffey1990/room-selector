@@ -282,9 +282,20 @@ DKIM/DMARC-authenticated). Caveat: a freshly-authenticated domain has no
 sending reputation, which is itself a mild spam signal — likely better, not
 certainly better. Re-measure with the same `sendOobCode` curl after flipping.
 
-Owner call 2026-08-03: **do not block the P1 deploy on this.** Ship
-enforcement, then fix deliverability. Recorded here so it does not get
-rediscovered as a mystery ("nobody submitted").
+**Owner call 2026-08-03 (revised): fix deliverability FIRST, then deploy.**
+The owner's own trip is the first real use of this, so no participant should
+meet a spam-foldered verification link. Sequence:
+
+1. Point Firebase Auth at Brevo SMTP (`notification.sendEmail.method` →
+   `CUSTOM_SMTP`, sender `noreply@roomselector5000.com`). **The Brevo SMTP
+   key is not the same credential as `BREVO_API_KEY`** — the transactional
+   API key will not authenticate an SMTP session; generate an SMTP key in
+   Brevo's SMTP & API panel.
+2. Re-run the `accounts:sendOobCode` curl and confirm it reaches the inbox.
+3. `npm run build && firebase deploy --only firestore,functions,hosting`.
+4. Verify in a browser: 390px and desktop, dark, zero console errors.
+
+Recorded so this does not get rediscovered as a mystery ("nobody submitted").
 
 **1.2 Results email at finalization.** Without it the organizer hand-delivers
 results to 18 people. Send from `allocateRooms` after the batch commits, via
@@ -302,11 +313,32 @@ Content rules: the results email states each recipient's bed and exact dollar
 figure literally (voice rules apply in full). Include the results link and
 trip code.
 
-Harness note: production e2e cannot click emailed links, so the journey is
-verified against the emulators — see README "Local stack". **The existing
-`verify/e2e-napa-flow.mjs` will fail once enforcement is deployed**: it
-types an email and submits, which the callable now refuses. Pick one of the
-two production-e2e strategies in the draft before relying on it again.
+Harness note — **DECIDED 2026-08-03: admin-generated sign-in link.**
+`verify/e2e-napa-flow.mjs` calls Admin SDK
+`generateSignInWithEmailLink(email, {url, handleCodeInApp: true})`, which
+builds the genuine magic link and returns it **without sending mail**, then
+navigates to it. The run therefore walks the real production journey — link
+→ `/__/auth/action` → sign-in → submission — with no bypass in the callable
+and no mail to `demo-*@example.com`.
+
+Rejected: a custom-token shortcut (verifies submission works *given* a
+session, not that a person can obtain one — and the magic-link half is where
+both known bugs were), and the draft's env-gated bypass (a conditional hole
+in the check that makes ballots trustworthy, living in production).
+
+Two things this surfaced, both silent failures if missed:
+- **Each participant needs its own browser context.** Firebase Auth persists
+  per origin, so a shared context signs everyone in as whoever went first and
+  the trip gets allocated over one ballot repeated, with nothing visibly wrong.
+- `completeSignIn()` **prompts** for the address when there is no stashed
+  submission (the open-on-another-device path). The dialog handler must answer
+  it with the address; auto-accepting blank fails sign-in confusingly.
+
+Signing in *before* filling the form also makes the form short-circuit at
+`SubmissionForm`'s `if (user?.email)` branch, so the harness generates no
+verification email at all. `firebase-admin` is now a root devDependency.
+
+The emulator harnesses stay the fast loop — see README "Local stack".
 
 Two traps found the hard way, both of which returned no error:
 - A single-use sign-in code plus React StrictMode's double-invoked effect
