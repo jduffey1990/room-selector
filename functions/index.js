@@ -67,7 +67,15 @@ async function requireAdmin(tripId, adminCode) {
 // Listing import calls a paid API and, like createTrip, is unauthenticated --
 // so it is a spam target with a bill attached. maxInstances caps the blast
 // radius until App Check (P2.3) covers it properly.
-const extractOpts = {...opts, maxInstances: 3, secrets: ["ANTHROPIC_API_KEY"]};
+// timeoutSeconds is raised from the 60s default: plain sample text took 11.7s
+// measured, and a multi-page PDF is meaningfully slower. A timeout here reads
+// to the organizer as "it just didn't work" with nothing to act on.
+const extractOpts = {
+  ...opts,
+  maxInstances: 3,
+  timeoutSeconds: 180,
+  secrets: ["ANTHROPIC_API_KEY"],
+};
 
 /**
  * Reads a listing and returns a DRAFT trip. Writes nothing.
