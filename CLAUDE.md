@@ -325,6 +325,18 @@ Do **not** enable Brevo's "block unauthorized IPs for SMTP keys". Firebase Auth
 sends from Google infrastructure with no fixed, published IP range; enabling it
 stops auth email entirely.
 
+**Rotating the Brevo SMTP key BREAKS auth email until the PATCH above is
+re-run.** Firebase stores that password in its own config; rotating it in Brevo
+leaves Firebase authenticating with a dead credential, and the failure is
+silent — `sendOobCode` still returns 200 and queues a send that never arrives.
+Rotated once already (owner, 2026-08-03). The order is always: rotate in Brevo
+→ re-run the PATCH → send a test `sendOobCode` and confirm it lands.
+
+**The Brevo SMTP key is a different credential from `BREVO_API_KEY`.** The
+transactional API key (used by `functions/email.js` for results emails) will
+not authenticate an SMTP session, and vice versa. Rotating one does not affect
+the other.
+
 Original call, kept for the record:
 **fix deliverability FIRST, then deploy.**
 The owner's own trip is the first real use of this, so no participant should
