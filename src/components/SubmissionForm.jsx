@@ -168,12 +168,20 @@ export default function SubmissionForm() {
   };
 
   const handleSubmit = async () => {
-    if (!email.trim()) {
+    // Once signed in, identity comes from the verified token and the local
+    // `email` state stays empty — it is only filled on the unverified path.
+    // Guarding on `email` alone rejected every signed-in submission with
+    // "Please enter your email" while the field visibly showed their address,
+    // because the button's own disabled prop already uses `user?.email ||
+    // email`. The two must agree or the button enables onto a dead end.
+    const effectiveEmail = (user?.email || email).trim();
+
+    if (!effectiveEmail) {
       alert('Please enter your email');
       return;
     }
 
-    if (!email.includes('@')) {
+    if (!effectiveEmail.includes('@')) {
       alert('Please enter a valid email');
       return;
     }
@@ -183,8 +191,10 @@ export default function SubmissionForm() {
       return;
     }
 
+    // Same reason: comparing against the empty `email` let a signed-in user
+    // name themselves as their own partner and slip past this check.
     if (partnerEmail.trim() &&
-        partnerEmail.trim().toLowerCase() === email.trim().toLowerCase()) {
+        partnerEmail.trim().toLowerCase() === effectiveEmail.toLowerCase()) {
       alert('Partner email must be a different person');
       return;
     }
