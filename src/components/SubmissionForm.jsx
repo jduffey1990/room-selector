@@ -4,8 +4,9 @@ import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firesto
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, callFn } from '../firebase';
 import { auth, sendVerificationLink, readPending, clearPending } from '../auth';
-import { CheckCircle2, ChevronDown, ChevronUp, DollarSign, Mail } from 'lucide-react';
+import { CheckCircle2, DollarSign, Mail } from 'lucide-react';
 import SelectaBot, { BotLoading } from './SelectaBot';
+import RankedList from './RankedList';
 
 const PRICE_INCREMENT = 25;
 
@@ -381,6 +382,17 @@ export default function SubmissionForm() {
           </p>
         </div>
 
+        {/* The ballot's running order, above the bed list because it is the
+            thing being produced. Renders nothing until something is ranked. */}
+        <RankedList
+          items={preferences
+            .map((id) => rooms.find((r) => r.id === id))
+            .filter(Boolean)
+            .map((r) => ({ id: r.id, name: r.name }))}
+          onReorder={movePreference}
+          onRemove={togglePreference}
+        />
+
         {/* Rooms */}
         <div className="space-y-4 mb-6">
           {rooms.map((room, idx) => {
@@ -410,7 +422,11 @@ export default function SubmissionForm() {
                     </div>
                   </div>
 
-                  {/* Ranking */}
+                  {/* Ranking. The reorder controls used to live here, one pair
+                      per card, which put the ordering controls somewhere the
+                      ordering itself was not visible. They now sit in
+                      RankedList next to the running order; the card keeps the
+                      one decision that belongs to the bed -- in or out. */}
                   <div className="flex items-center gap-3 mb-4">
                     <button
                       onClick={() => togglePreference(room.id)}
@@ -422,25 +438,6 @@ export default function SubmissionForm() {
                     >
                       {isRanked ? `Ranked #${prefIndex + 1}` : 'Add to Preferences'}
                     </button>
-                    
-                    {isRanked && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => movePreference(prefIndex, Math.max(0, prefIndex - 1))}
-                          disabled={prefIndex === 0}
-                          className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronUp className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => movePreference(prefIndex, Math.min(preferences.length - 1, prefIndex + 1))}
-                          disabled={prefIndex === preferences.length - 1}
-                          className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <ChevronDown className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   {/* Price Adjustment */}

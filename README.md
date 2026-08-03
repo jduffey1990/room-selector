@@ -127,7 +127,28 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
   PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
   node verify/local-magiclink-flow.mjs     # full journey, 390px + desktop
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+  PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/p5-ranking.mjs               # drag / keys / buttons reorder
 ```
+
+**App Check debug token.** headless Chromium cannot solve reCAPTCHA, so App
+Check's token exchange returns 403 and any harness asserting zero console
+errors fails on noise it cannot fix. Register a debug token once (Firebase
+console → App Check → Apps → the web app → Manage debug tokens, or
+`POST .../debugTokens` on `firebaseappcheck.googleapis.com` with
+`X-Goog-User-Project: room-selector`), then put it in a gitignored `.env.local`:
+
+```
+APPCHECK_DEBUG_TOKEN=<uuid>
+```
+
+**Never prefix it `VITE_`.** Vite inlines `VITE_*` into the production bundle
+at build time, and a debug token in shipped JS is an App Check bypass for
+anyone who reads it. Unprefixed, Vite loads it for its own process and never
+emits it; the harnesses read it in Node and inject it into the browser
+themselves. Verify with `grep -r "$TOKEN" dist/` after a build — it must
+return nothing.
 
 Firestore must point at the emulator whenever Auth does: a browser signed in
 against the Auth emulator holds a token signed `alg: none`, which production
