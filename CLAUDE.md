@@ -591,14 +591,23 @@ callables plus dashboard UI:
 ### P5 — The first-timer's pass (owner-requested 2026-08-03, third session)
 
 Everything through P4 makes the mechanism *correct*. P5 is about whether a
-person who has never seen this product can drive it. Three places in the
-create → join → submit journey leave someone guessing, and guessing is
-expensive here in a specific way: a person who misunderstands the form submits
-a ballot that does not say what they meant, and **the allocator then fairly
-allocates fiction**. Envy-freeness over a misunderstood ballot is worth
-nothing, and — like every other bug in this repo — it fails silently.
+person who has never seen this product can drive it. Five places in the
+create → join → submit journey leave someone guessing or make them work too
+hard to say a simple thing, and that is expensive here in a specific way: a
+person who misunderstands the form submits a ballot that does not say what
+they meant, and **the allocator then fairly allocates fiction**. Envy-freeness
+over a misunderstood ballot is worth nothing, and — like every other bug in
+this repo — it fails silently.
 
-None of these is a crash. All three return HTTP 200.
+None of these is a crash. Every one of them returns HTTP 200.
+
+5.1–5.3 were the owner's original three; **5.4 and 5.5 were promoted out of
+"Later" in the same session**, because drag-rank and the ranking assist are
+the same problem seen from the other end — not "why is this confusing" but
+"why is this so much work to say."
+
+**5.4 is the only P5 item with no external dependency** and can ship alone.
+5.5 is blocked on an owner-created API key, like P0 before it.
 
 **5.1 Listing import: say what to paste.**
 
@@ -721,9 +730,9 @@ understanding it explains it nowhere.
 - Voice: the dialog explains *why adjustments sum to zero* and *why ranking
   honestly is the right move*, restated from `ARCHITECTURE.md` rather than
   re-derived. **It must not coach anyone toward a winning bid** — the
-  mechanism is not strategyproof, and the parked "Drag-rank + AI assist" note
-  binds here too. Helping someone express what they want is the goal; helping
-  them win breaks the property being sold.
+  mechanism is not strategyproof (`ARCHITECTURE.md:93-96`), and the constraint
+  spelled out in P5.5 binds this copy too. Helping someone express what they
+  want is the goal; helping them win breaks the property being sold.
 - The dialog and tooltips live inside `data-ad-free="submission"`
   ([SubmissionForm.jsx:313](src/components/SubmissionForm.jsx#L313)). P2.2
   forbids ad markup in money or fairness UI and new UI does not get an
@@ -733,6 +742,118 @@ understanding it explains it nowhere.
 > adjustments must sum to zero; the explanation is reachable again after
 > dismissal; tooltips open by tap at 390px; zero console errors, dark mode.
 
+**5.4 Drag to rank.**
+
+Ranking today is a "Ranked #3" button plus up/down chevrons
+([SubmissionForm.jsx:426-443](src/components/SubmissionForm.jsx#L426-L443)) —
+one tap per position, per bed. With six beds that is a lot of tapping to say
+something simple, and the current position is only legible by reading a number
+off a button. Promoted here from "Later" because it is the same problem as the
+rest of P5: the ballot should be easy to make say what the person means.
+
+- Drag to reorder the ranked list, with the chevrons **kept** as a fallback.
+  Not decoration: drag is unreliable with assistive tech and fiddly at 390px
+  with a thumb, and the harness drives the buttons.
+- No API, no key, no server change. This is the one P5 item with no external
+  dependency — it can ship on its own.
+- **Keep the exact button strings** `Add to Preferences` and `Ranked #N`, or
+  update `verify/e2e-napa-flow.mjs` in the same commit. See the harness note
+  under "Production failure modes".
+
+> **Acceptance:** a six-bed ballot can be fully ordered by dragging; the
+> chevrons still work and still carry the same labels; keyboard reordering
+> works; zero console errors at 390px and desktop, dark mode.
+
+**5.5 AI ranking assist (owner-requested 2026-08-03; promoted from "Later").**
+
+Someone who knows they want "a real bed near a bathroom, and I'd rather save
+money than have a view" still has to translate that into an ordering plus a
+set of adjustments summing to zero. The assist does that translation and hands
+back a **draft the person edits**, in exactly the same shape as P0's listing
+import: a suggestion, never a commitment, and nothing is submitted until they
+submit it.
+
+**The constraint is the whole feature, so it is stated first and it is not
+negotiable.** From the parked note, carried over verbatim in force:
+
+> The assist helps someone *express what they actually want*. It must never
+> help them *win*: the mechanism is not strategyproof, and coaching bid-shading
+> would break the exact property the product sells. If a user asks how to game
+> it, the honest answer is that bidding true values is what makes the result
+> defensible.
+
+Concretely, that means the callable is forbidden from reasoning about **other
+participants** at all. It never sees another person's bids, it is never told
+how many people have submitted, and its prompt gives it no notion of winning.
+`ARCHITECTURE.md:93-96` explains why: the mechanism is manipulable in
+principle, and what actually holds it together is that these are friends who
+don't see each other's bids. An assistant that coached shading would be the
+thing that breaks that, and it would break it at scale.
+
+- New callable **`suggestRanking`**: free-text preferences + this trip's bed
+  list in, `{preferences: [roomId], roomPrices: [{id, price}], notes}` out.
+  (P5 adds two callables in total, this one and P5.2's
+  `listParticipantNames` — whichever ships first is the 8th.)
+- **Structured outputs (`output_config.format` + JSON schema), not ad-hoc tool
+  calling** — same reasoning as P0: the response feeds a money form, so it must
+  be parseable by construction rather than by hand-written repair.
+- **The zero-sum rule is enforced in code after the model returns, not asked
+  for in the prompt.** A model that returns adjustments summing to $25 must not
+  be able to produce a ballot the client then rejects — normalize or reject
+  server-side. `submitPreferences` re-validates regardless
+  ([functions/index.js:293-298](functions/index.js#L293-L298)); this is about
+  not handing someone a broken draft.
+- **Model: decide by measurement, not by inheriting P0's answer.** This is a
+  different task from extraction — short input, a judgment about what someone
+  meant. Start at `claude-opus-5` and sweep down; extend
+  `verify/preview-listing-import.cjs --sweep` (or copy its shape) so the choice
+  is a measured one with the numbers in the commit message, exactly as the
+  haiku decision was. Do not assume `claude-haiku-4-5` transfers.
+- App Check enforced (participant-facing and costs money per call — a bigger
+  spam target than `extractListing`, which at least sits behind trip creation).
+  Cap it hard, and cap it *per submission*, not just globally.
+- **The draft lands in the form, never in Firestore.** Same acceptance shape as
+  P0: with no key set, the form stays fully usable by hand and the assist
+  degrades to a logged skip. It must never block a submission.
+
+**API key — decided 2026-08-03: a second, separate `ANTHROPIC_API_KEY_ASSIST`
+secret, not a reuse of P0's key.** Checked against the live API docs rather
+than assumed, because two of the three intuitive reasons to split are wrong:
+
+- **Rate limits do NOT separate per key.** They are set **per organization**
+  (`platform.claude.com/docs/en/api/rate-limits`), with optional *lower* caps
+  per **workspace**. A second key buys zero additional capacity and zero
+  isolation — a runaway assist would still consume the same RPM/ITPM pool that
+  `extractListing` draws on. Only a separate workspace can fence that off, and
+  a workspace cap is a **ceiling, not a reservation**.
+- **Cost attribution in dollars is by workspace, not by key.** The Cost API
+  groups by `workspace_id` and `description` only. The **Usage** API does
+  filter and group by `api_key_ids[]` — so a separate key gives per-feature
+  *token* attribution, which the docs explicitly call the recommended cost
+  proxy when many keys are in play. Good enough here; both features run on
+  known per-call costs.
+- **The real reason to split is revocation.** The assist is participant-facing
+  — roughly one caller per bed per trip, versus one organizer — so it is the
+  more exposed surface. A separate key means abuse of the assist is killed by
+  revoking one secret, and trip creation keeps working. That alone justifies
+  it; the other two arguments do not.
+
+Consequence to accept deliberately: **two secrets to rotate, and the
+graceful-degradation path must be implemented twice, independently.** That is
+a feature — one dead key must not take both features down.
+
+If the owner later wants true dollar-level separation or a hard spend ceiling
+on the assist, the lever is a **separate workspace** (whose keys then serve
+this callable), not more keys. Owner's call, owner's account — same rule as
+Brevo and AdSense.
+
+> **Acceptance:** a plain-English description of what someone wants produces a
+> ranking and a balanced set of adjustments they only have to adjust, not
+> build; the adjustments sum to zero before the draft is ever shown; asking the
+> assist how to win the allocation gets the honest answer from the constraint
+> above, not a strategy; with no assist key set, the submission form works
+> exactly as it does today.
+
 ---
 
 ## Later (parked — constraints still bind)
@@ -740,11 +861,9 @@ understanding it explains it nowhere.
 - ~~**Listing import.**~~ **Promoted 2026-08-03 — now P0.** The
   ad-vignette-before-the-AI-call idea stays parked with P2.2 (needs the
   owner's AdSense account).
-- **Drag-rank + AI assist.** The assist helps someone *express what they
-  actually want*. It must never help them *win*: the mechanism is not
-  strategyproof, and coaching bid-shading would break the exact property
-  the product sells. If a user asks how to game it, the honest answer is
-  that bidding true values is what makes the result defensible.
+- ~~**Drag-rank + AI assist.**~~ **Promoted 2026-08-03 — now P5.4 (drag-rank)
+  and P5.5 (the assist).** The never-help-them-win constraint moved with it and
+  is quoted in full there; it did not soften on the way.
 - **Equal-budget bidding** (the real answer to wealth leaking into
   allocations, and to manipulation among strangers) and a pro tier.
 - **Small polish, grab when touching the client:** replace the default Vite
@@ -785,11 +904,20 @@ done and verified.
 
 **The code work now is P5 — the first-timer's pass**, specced in the roadmap
 above during the third session on 2026-08-03 and **not started**. It is UI and
-one new callable, not mechanism: the allocator, the auditor, and the stored
-`partnerEmail` shape are all deliberately untouched by it. Read P5.2 before
-touching the partner flow — the dropdown-ordering problem is the part that
-looks simple and is not. Read the harness note under "Production failure
-modes" before touching any copy on the submission form.
+two new callables, not mechanism: the allocator, the auditor, and the stored
+`partnerEmail` shape are all deliberately untouched by it.
+
+- **Start with P5.4** if you want something that ships today — drag-rank needs
+  no key, no callable, and no owner action.
+- **Read P5.2 before touching the partner flow.** The dropdown-ordering problem
+  is the part that looks simple and is not.
+- **Read P5.5's constraint before writing a line of the assist.** It must never
+  coach someone toward a winning bid; that is the property the product sells.
+- **Read the harness note under "Production failure modes"** before touching
+  any copy on the submission form.
+- P5.5 needs `ANTHROPIC_API_KEY_ASSIST` — **owner's to create**, deliberately
+  separate from P0's key. The reasoning, including which of the usual
+  arguments for splitting are factually wrong, is written out in P5.5.
 
 Everything else outstanding is owner-blocked, not repo-blocked:
 
