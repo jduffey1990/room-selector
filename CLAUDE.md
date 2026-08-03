@@ -94,7 +94,8 @@ limits. Do not restate that content here.
 | Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
 | Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
 | Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
-| Trip dates | **Not collected.** Blocks retention (P3). |
+| Trip dates | **Collected 2026-08-03** (optional `startDate`/`endDate`, YYYY-MM-DD strings on the trip doc). |
+| Retention (P3) | **Cron deployed, DRY RUN.** `purgeExpiredTrips`, monthly 09:00 UTC on the 1st. Deletes nothing until `RETENTION_ENABLED=true`. Cascade extracted to `functions/trip-cascade.js` and shared with `seed --clean`. |
 | Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
 | App Check / ads | None yet — P2.2, P2.3. |
 

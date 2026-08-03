@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 
 // One place to change the address. It MUST route to a real inbox: a contact
 // route in a privacy policy that bounces is worse than none.
-const CONTACT = 'privacy@roomselector5000.com';
+const CONTACT = 'foxdogdevelopment@gmail.com';
 
 // Kept in the exported constant so P3's retention cron and this page cannot
 // drift apart silently -- the acceptance criterion is that the wording matches

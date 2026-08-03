@@ -1,4 +1,5 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 // Import FieldValue from the modular entry point rather than reaching through
 // admin.firestore. The Functions emulator wraps firebase-admin to redirect
@@ -9,6 +10,7 @@ const crypto = require("crypto");
 const {computeAllocation} = require("./allocation");
 const {sendResultsEmails} = require("./email");
 const listingImport = require("./listing-import");
+const cascade = require("./trip-cascade");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -131,8 +133,13 @@ exports.extractListing = onCall(extractOpts, async (request) => {
   }
 });
 
+// YYYY-MM-DD or nothing. Stored as a plain string rather than a Timestamp:
+// a trip's end date is a calendar day, not an instant, and converting to a
+// Timestamp would silently bind it to whatever timezone the server ran in.
+const isDateString = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 exports.createTrip = onCall(opts, async (request) => {
-  const {name, totalTripCost, rooms} = request.data || {};
+  const {name, totalTripCost, rooms, startDate, endDate} = request.data || {};
 
   if (typeof name !== "string" || !name.trim()) {
     throw new HttpsError("invalid-argument", "Trip name required");
@@ -158,6 +165,11 @@ exports.createTrip = onCall(opts, async (request) => {
     name: name.trim().slice(0, 120),
     totalTripCost: Number(totalTripCost) || 0,
     status: "collecting",
+    // Dates are optional so existing clients keep working. endDate is what
+    // the retention rule (P3) measures from; without it a trip falls back to
+    // the longer createdAt window.
+    startDate: isDateString(startDate) ? startDate : null,
+    endDate: isDateString(endDate) ? endDate : null,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -445,4 +457,43 @@ exports.allocateRooms = onCall(allocateOpts, async (request) => {
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", error.message);
   }
+});
+// Retention (P3). The privacy policy promises deletion 6 months after a trip
+// ends, so this is a published commitment rather than housekeeping.
+//
+// DRY RUN BY DEFAULT. CLAUDE.md requires the first unattended run to only log
+// what it would delete; actual deletion turns on when the owner sets
+// RETENTION_ENABLED=true after reading a log. The flag defaults to off so
+// forgetting to set it fails safe -- the cron reports and deletes nothing.
+exports.purgeExpiredTrips = onSchedule({
+  schedule: "0 9 1 * *", // 09:00 UTC on the 1st of each month
+  timeZone: "UTC",
+  ...opts,
+}, async () => {
+  const armed = process.env.RETENTION_ENABLED === "true";
+  const now = new Date();
+  const {expired, unjudgeable} = await cascade.findExpiredTrips(db, now);
+
+  console.log(`[retention] ${armed ? "ARMED" : "DRY RUN"} at ${now.toISOString()}: ` +
+      `${expired.length} expired, ${unjudgeable.length} unjudgeable`);
+
+  for (const trip of unjudgeable) {
+    // Neither endDate nor createdAt. Reported, never guessed at.
+    console.warn(`[retention] SKIP ${trip.id} "${trip.name}" — no usable date`);
+  }
+
+  for (const trip of expired) {
+    // Count the cascade even in a dry run, so the log the owner reviews shows
+    // real blast radius rather than just a trip name.
+    const {counts} = await cascade.collectTripRefs(db, trip.ref);
+    const detail = `${counts.rooms} rooms, ${counts.submissions} submissions, ` +
+        `${counts.assignments} assignments, ${counts.codes} codes`;
+    console.log(`[retention] ${armed ? "DELETING" : "would delete"} ${trip.id} ` +
+        `"${trip.name}" — due ${trip.dueAt.toISOString().slice(0, 10)} ` +
+        `by ${trip.basis} (${detail})`);
+    if (armed) await cascade.deleteTripCascade(db, trip.ref);
+  }
+
+  console.log(`[retention] done. ${armed ? "deleted" : "would delete"} ` +
+      `${expired.length} trip(s).`);
 });

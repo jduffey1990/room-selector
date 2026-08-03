@@ -10,6 +10,10 @@
 
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+// Same cascade the retention cron and P4 use. Extracted rather than copied:
+// a duplicate that forgets the codes/{code} reverse lookup leaves a live
+// participant code pointing at a deleted trip.
+const {deleteTripCascade} = require("../functions/trip-cascade");
 const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({credential: admin.credential.cert(serviceAccount)});
@@ -84,30 +88,12 @@ async function clean() {
     return;
   }
   for (const trip of demo) {
-    const rooms = await db.collection("rooms").where("tripId", "==", trip.id).get();
-    const subs = await db.collection("submissions").where("tripId", "==", trip.id).get();
-    const assigns = await db.collection("assignments").where("tripId", "==", trip.id).get();
-    const secrets = await trip.ref.collection("secret").get();
-    const batch = db.batch();
-    rooms.docs.forEach((d) => batch.delete(d.ref));
-    subs.docs.forEach((d) => batch.delete(d.ref));
-    assigns.docs.forEach((d) => batch.delete(d.ref));
-    for (const sec of secrets.docs) {
-      const pc = sec.data().participantCode;
-      if (pc) batch.delete(db.collection("codes").doc(pc));
-      batch.delete(sec.ref);
-    }
-    batch.delete(trip.ref);
-    await batch.commit();
-    console.log(`removed ${trip.data().name} (${rooms.size} rooms, ` +
-        `${subs.size} submissions, ${assigns.size} assignments)`);
+    const counts = await deleteTripCascade(db, trip.ref);
+    console.log(`removed ${trip.data().name} (${counts.rooms} rooms, ` +
+        `${counts.submissions} submissions, ${counts.assignments} assignments)`);
   }
 }
 
-/**
- * Creates the demo trips.
- * @return {!Promise<void>}
- */
 async function seed() {
   for (const spec of TRIPS) {
     const capacity = spec.rooms.reduce((n, r) => n + r.capacity, 0);

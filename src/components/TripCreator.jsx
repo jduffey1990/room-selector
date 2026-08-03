@@ -16,6 +16,12 @@ export default function TripCreator() {
   // Trip details
   const [tripName, setTripName] = useState('');
   const [totalCost, setTotalCost] = useState('');
+  // Optional. endDate is what the 6-month retention rule measures from, and
+  // the privacy policy publishes that rule -- so leaving it blank means the
+  // trip falls back to the longer createdAt window, not that it is kept
+  // forever.
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Rooms
   const [rooms, setRooms] = useState([
@@ -125,6 +131,8 @@ export default function TripCreator() {
       // Codes are generated server-side with crypto.randomBytes and stored in
       // a document no client can read.
       const created = await callFn('createTrip', {
+        startDate: startDate || null,
+        endDate: endDate || null,
         name: tripName,
         totalTripCost: Number(totalCost) || 0,
         rooms: rooms.map((room) => ({
@@ -359,6 +367,34 @@ export default function TripCreator() {
                 <p className="text-sm text-gray-500 mt-1">
                   What the whole place costs. You'll add beds next, and we'll
                   split this across them.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trip Dates
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="flex-1 min-w-[9rem] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Trip start date"
+                  />
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate || undefined}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="flex-1 min-w-[9rem] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Trip end date"
+                  />
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  Optional. We delete a trip's data six months after it ends —
+                  see our{' '}
+                  <a href="#/privacy" className="underline">privacy policy</a>.
                 </p>
               </div>
 
