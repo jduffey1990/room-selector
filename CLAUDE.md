@@ -90,16 +90,16 @@ limits. Do not restate that content here.
 | `allocateRooms` | **Envy-free allocator**, proven in production on a discriminating input (2026-07-28) |
 | Couples | Mutual `partnerEmail` confirmation. The `+copy` hack no longer forms couples. |
 | Design system | Selecta-bot (cream/teal/coral, bot states), all six views verified at 390px, dark mode, zero console errors |
-| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
+| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/ads-placement.mjs` (P2.2 negative), `verify/p4-lifecycle.mjs` (edit form + reopen→re-allocate), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/envy-audit.cjs` (the shared independent envy check), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
 | Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
 | Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
 | Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
-| Trip lifecycle (P4) | **Partly shipped 2026-08-03.** Callables live: `updateTrip`, `closeSubmissions`, `removeSubmission`, `reopenTrip`, `deleteTrip` — all admin-gated. Dashboard UI for close/reopen/remove/delete, verified in production. **Two gaps: `updateTrip` has no dashboard form, and reopen→re-allocate has not been exercised end to end.** |
+| Trip lifecycle (P4) | **COMPLETE 2026-08-03.** Five admin-gated callables, all reachable from the dashboard including the `updateTrip` edit form. Both former gaps closed and verified in production by `verify/p4-lifecycle.mjs` (24/24): the edit form persists and refuses once anyone has submitted; reopen → re-allocate yields a fresh **envy-free** result (envyPairs=0, budget error 1.42e-14). |
 | Trip dates | **Collected 2026-08-03** (optional `startDate`/`endDate`, YYYY-MM-DD strings on the trip doc). |
 | Retention (P3) | **Cron deployed, DRY RUN.** `purgeExpiredTrips`, monthly 09:00 UTC on the 1st. Deletes nothing until `RETENTION_ENABLED=true`. Cascade extracted to `functions/trip-cascade.js` and shared with `seed --clean`. |
 | Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
 | App Check | **ENFORCED 2026-08-03** (P2.3) on six of seven callables via classic reCAPTCHA v3. `getResults` deliberately open — it is opened from the results email, often days later in a mail client's in-app browser where reCAPTCHA scores poorly, and blocking someone from seeing what they owe is worse than a scraper reading an already-shared page. Raw `curl` → 401 on the six, 400 on `getResults`. **The e2e harness needs `APPCHECK_DEBUG_TOKEN` (registered debug token, never committed) or every submission is rejected.** |
-| Ads | None yet — P2.2, needs the owner's AdSense account. |
+| Ads | **Code shipped 2026-08-03 (P2.2).** Verification meta tag + `public/ads.txt` live; `src/ads.js` allowlists the AdSense loader to `/`, `/create`, `/join`, `/privacy`, `/terms`. Money and fairness UI never loads ad code — proven by `verify/ads-placement.mjs`, 39/39. **No ads serve yet:** the site is still "needs review", and the Auto ads format toggles are AdSense-UI only (owner). See `docs/drafts/P2.2-adsense-settings.md`. |
 
 Deploy note: **rules, functions, and client must deploy together**
 (`firebase deploy --only firestore,functions,hosting`, after `npm run build`).
@@ -113,6 +113,24 @@ Production failure modes already hit, worth remembering:
   for every asset: blank page, no console error.
 - Every production bug so far returned HTTP 200 and logged nothing. Verify in a
   real browser, dark mode, asserting zero console errors.
+
+### Shipped (2026-08-03, second session) — do not redo
+
+**P4 complete** (the `updateTrip` dashboard form, plus reopen → re-allocate
+exercised end to end and audited envy-free) and **P2.2's code half**
+(verification meta tag, `ads.txt`, route-gated loader, `[data-ad-free]`
+guards, `verify/ads-placement.mjs`).
+
+Three things worth not relearning:
+- **AdSense format control does not exist in page code.** Vignette-only is
+  an account setting. Anything that must be guaranteed has to be guaranteed
+  by *where the script loads*, not by configuration.
+- **The `**` hosting rewrite returns 200 with `index.html` for any missing
+  path**, so `ads.txt` and any other static file must be checked by BODY.
+  Same trap as the `/__/auth/action` check in P1.1.
+- Extracting the envy checker into `verify/envy-audit.cjs` was verified
+  behaviour-preserving by regenerating `verify/simulation-results.md` and
+  diffing: byte-identical apart from the wall-clock line.
 
 ### Shipped (2026-08-03, one supervised session) — do not redo
 
@@ -439,10 +457,42 @@ required (emails are collected from the public) and AdSense will not approve
 without it. Must state: what is collected (emails, bids, preferences), the
 **6-month retention rule from P3**, that ads are served, and a contact route.
 
-**2.2 AdSense — Auto ads, vignettes only.** Owner decision: monetize
-navigation boundaries (after creating a trip, after joining), keep the pages
-themselves bespoke. Enable Auto ads with the vignette format on and in-page /
-anchored formats off.
+**2.2 AdSense — Auto ads, vignettes only. CODE SHIPPED 2026-08-03; ad
+serving blocked on the owner.** Owner decision: monetize navigation
+boundaries (after creating a trip, after joining), keep the pages themselves
+bespoke.
+
+**Measured 2026-08-03: the format toggles cannot be set from this repo.**
+Auto ads formats (vignette on; banner/multiplex/related-search, anchor, side
+rail and *ad intents* off) are AdSense-UI settings with no page-level
+equivalent — `enable_page_level_ads` is legacy. AdSense's "excluded areas"
+is UI-side too, and Google documents that it "only applies to in-page Auto
+ads… won't prevent overlay ads such as anchor ads." **So account settings
+can never be the guarantee.**
+
+The guarantee is `src/ads.js`: the loader is allowlisted to `/`, `/create`,
+`/join`, `/privacy`, `/terms`, and denied by default everywhere else. A route
+that never loads `adsbygoogle.js` cannot show an ad in any format. `/create`
+and `/join` are on the list because a vignette shows as a reader *leaves* a
+page — the destinations stay clean.
+
+Verification is the **meta tag** (`google-adsense-account`), deliberately not
+the loader snippet: a `<script>` in `<head>` would put ad code on every route
+of this SPA including `/results/:tripId`, making the P2.1 privacy promise
+("no ads on the pages where you rank beds, adjust prices, or read your
+result") false in writing.
+
+Honest limit: once `adsbygoogle.js` has executed, removing its tag does not
+unload it. The hard guarantee is the loader never entering the document on a
+**direct load** of a money route — the common case, since trip links arrive
+by text and results links by email. `verify/ads-placement.mjs` asserts the
+in-session navigation case as an outcome rather than trusting the mechanism.
+
+**Remaining, owner-only: finish site verification (still "needs review") and
+set the Auto ads format toggles.** Both written out step by step in
+`docs/drafts/P2.2-adsense-settings.md`. Ad intents is the one that is easy to
+miss — it turns page *text* into ad links, which on a page explaining what
+someone pays would rewrite the explanation itself.
 
 > **Ad constraints — hard:**
 > - **No forced-countdown or non-dismissible ads.** That format belongs to
@@ -495,10 +545,15 @@ callables plus dashboard UI:
   collecting, so the organizer can rerun after a change.
 - **Delete trip** — full cascade via the P3 shared module.
 
-> **Acceptance:** each operation exercised through the dashboard on a
-> `[demo]` trip in production; reopening then re-allocating produces a
-> fresh, envy-free result; none of these callables work with a participant
-> code.
+> **Acceptance — MET 2026-08-03.** Every operation exercised through the
+> dashboard on `[demo]` trips in production. `verify/p4-lifecycle.mjs`,
+> 24/24, zero console errors, 390px for the edit form and desktop for
+> allocation: the edit form persists name/cost/beds and leaves no orphaned
+> rooms, and refuses with an explanation once anyone has submitted; reopen
+> cleared 3 assignments and kept all 4 ballots; re-allocation produced 3
+> fresh assignment docs with **envyPairs=0, maxEnvy=0**, budget error
+> 1.42e-14. `requireAdmin` rejects participant codes in one place for all
+> five callables.
 
 ---
 
@@ -547,24 +602,41 @@ being asked. A session isn't finished until its hand-off is.
 
 ## Start here (autonomous session)
 
-**As of 2026-08-03 the roadmap above is shipped except for two P4 gaps and
-P2.2.** Start here:
+**As of 2026-08-03 (second session) the roadmap above is shipped.** P4 is
+complete and P2.2's code half is done and verified. What is left is not code:
 
-1. **Finish P4** — the only unblocked code work left.
-   - `updateTrip` has no dashboard form. The callable is deployed and
-     verified; an organizer simply cannot reach "edit trip/rooms".
-   - Exercise **reopen → re-allocate** end to end and confirm the result is
-     still envy-free. Reopen is verified to clear assignments and reset
-     status; the composition with `allocateRooms` is untested.
-2. **P2.2 AdSense** — blocked on the owner's account (in progress
-   2026-08-03). When the publisher ID arrives: `ads.txt` at the domain root
-   (a build-output change, not a paste), the AdSense snippet, then Auto ads
-   with vignettes on and in-page/anchored off. The ad constraints in P2.2 are
-   hard requirements, not preferences.
+1. **P2.2 is blocked on the owner, not on the repo.** Finish AdSense site
+   verification (still "Your site needs review" — both the meta tag and
+   `ads.txt` are already live, so this is clicking Verify) and set the Auto
+   ads format toggles. Step by step in
+   `docs/drafts/P2.2-adsense-settings.md`. **Re-run
+   `verify/ads-placement.mjs` after approval** — until ads actually serve,
+   today's clean run is a baseline, not a proof.
 
-Everything below is history unless something regresses.
-(P2.2 AdSense needs the owner's AdSense account — build the vignette config
-and footer links, but actual ad serving waits for the owner.)
+2. **Open obligations carried over, still not closed:**
+   - `privacy@roomselector5000.com` — the policy currently points at
+     `foxdogdevelopment@gmail.com`; whichever address is real, it must route
+     to a real inbox.
+   - **P3 retention is still a DRY RUN.** The privacy policy promises
+     6-month deletion in writing; nothing is deleted until the owner reviews
+     a cron log and sets `RETENTION_ENABLED=true`.
+
+3. **Found 2026-08-03, needs the owner's decision — 18 orphaned
+   submissions.** `submissions` holds 18 documents from the January 2026
+   trip carrying **real email addresses** and **no `tripId` field at all**
+   (pre-dating the multi-trip schema; their trip document is gone).
+   Retention cannot reach them: `findExpiredTrips` iterates `trips` and
+   `collectTripRefs` queries `where("tripId","==",id)`, so a submission with
+   no trip is never a candidate. They are ~6 months old and the published
+   policy says they should be deleted. **Not deleted by this session** —
+   "do not ship unattended" forbids deleting production data the session did
+   not create. Options: delete them, or backfill a `tripId` so retention
+   sweeps them normally.
+
+4. **Papercut, deliberately not fixed** (out of scope, one line): the admin
+   dashboard's "View Results" button navigates to `/results/:tripId` with no
+   `code`, so an organizer who just typed an admin code is immediately asked
+   for a code again.
 
 Rules of engagement while unattended:
 

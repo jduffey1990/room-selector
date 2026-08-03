@@ -53,6 +53,12 @@ firebase deploy --only firestore,functions,hosting
 Rules, functions, and hosting must ship together — any two without the third
 is a broken app. Build first, or hosting serves a stale bundle.
 
+`--only hosting` is defensible for a change that touches no callable signature
+and no rule (the AdSense work in August 2026 was one). The reason for the
+three-together rule is skew — a client calling a callable it does not have, or
+reading a document the rules deny — so if there is no skew to create, there is
+nothing to break. Say why in the commit rather than doing it silently.
+
 Requires the Blaze plan — Cloud Functions need it. A $5 budget alert is
 configured, but **GCP budgets only alert, they never cap spend**. The real
 ceiling is `maxInstances` on each callable.
@@ -73,6 +79,19 @@ ANTHROPIC_API_KEY=$(firebase functions:secrets:access ANTHROPIC_API_KEY) \
 APPCHECK_DEBUG_TOKEN=<registered debug token> \
 PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
   node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>
+
+# Ads land only at navigation boundaries, never in money or fairness UI.
+# Needs a FINALIZED trip, or the results cards it checks never render.
+APPCHECK_DEBUG_TOKEN=<registered debug token> \
+PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/ads-placement.mjs <tripId> <participantCode> <adminCode>
+
+# Trip lifecycle (P4): edit-trip form, and reopen -> re-allocate staying
+# envy-free. First trip must have NO submissions, second must be finalized.
+APPCHECK_DEBUG_TOKEN=<registered debug token> \
+PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/p4-lifecycle.mjs <editTripId> <editAdminCode> \
+                               <allocTripId> <allocAdminCode>
 ```
 
 The e2e drives the deployed site in a dark-mode browser and fails on any
@@ -124,6 +143,8 @@ src/
   firebase.js            client config — the only one, don't add a second
   auth.js                magic-link sign-in + the stashed submission
   appcheck.js            App Check init; no-op without a site key
+  ads.js                 AdSense loader, allowlisted to navigation-boundary
+                         routes — money and fairness UI never loads ad code
 functions/
   allocation.js          the envy-free allocator (production)
   email.js               results email via Brevo; never fails an allocation
@@ -134,7 +155,11 @@ seed/
   allocate-envyfree.js   reference implementation of the allocator
   v1-archive/            frozen — how the January 2026 trip actually ran
 verify/                  e2e, regression, and simulation harnesses + results
-docs/drafts/             decision docs (magic-link auth)
+  envy-audit.cjs         the independent envy check, shared by the simulation
+                         and the lifecycle harness
+docs/drafts/             decision docs (magic-link auth, AdSense settings)
+public/ads.txt           copied to the dist root by Vite; AdSense reads it
+                         at /ads.txt
 firestore.rules          deny-by-default; the whole security model
 ```
 
