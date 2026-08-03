@@ -350,7 +350,12 @@ export default function AdminDashboard() {
             
             {trip.status === 'finalized' && (
               <button
-                onClick={() => navigate(`/results/${tripId}`)}
+                // Carry the code through. getResults accepts either code, and
+                // the organizer has already proved they hold the admin one --
+                // dropping it sent them straight to "enter your trip code".
+                // The results email builds its link the same way
+                // (functions/email.js), so this is the shape the route expects.
+                onClick={() => navigate(`/results/${tripId}?code=${encodeURIComponent(adminKey)}`)}
                 className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition font-medium"
               >
                 View Results

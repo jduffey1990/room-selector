@@ -249,12 +249,14 @@ console.log('\n=== gap 2: reopen -> re-allocate (desktop, dark) ===');
       `(was ${firstAudit.worstSurplus.toFixed(2)})`);
 
   // Results must render for real -- the assignment cards, not an empty state.
-  // Navigated with an explicit code rather than by clicking "View Results":
-  // that button goes to /results/:tripId with no code, so it lands on the
-  // "enter your trip code" prompt. Noted as a papercut, not fixed here.
-  await page.goto(`${BASE}/#/results/${allocTripId}?code=${allocAdminCode}`,
-      {waitUntil: 'domcontentloaded'});
+  // Reached by CLICKING "View Results" rather than by a crafted URL, because
+  // that button used to drop the code and dump the organizer on the "enter
+  // your trip code" prompt seconds after they had typed one. Going through
+  // the button is what keeps that from coming back.
+  await page.getByRole('button', {name: 'View Results'}).click();
   await page.waitForSelector('[data-ad-free="results"]', {timeout: 30000});
+  check('"View Results" carries the code — no second code prompt',
+      await page.getByPlaceholder('ABC12345').count() === 0);
   const resultsText = await page.locator('[data-ad-free="results"]').innerText();
   check('results page renders the re-allocated assignments',
       resultsText.includes('Room Assignments') && /\$\d/.test(resultsText));
