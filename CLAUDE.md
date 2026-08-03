@@ -95,7 +95,8 @@ limits. Do not restate that content here.
 | Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
 | Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
 | Trip dates | **Not collected.** Blocks retention (P3). |
-| App Check / privacy policy / ads | None yet — P2. |
+| Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
+| App Check / ads | None yet — P2.2, P2.3. |
 
 Deploy note: **rules, functions, and client must deploy together**
 (`firebase deploy --only firestore,functions,hosting`, after `npm run build`).
@@ -248,6 +249,16 @@ use `www.roomselector5000.com`. They do not. The link host comes from
 `actionCodeSettings.url` is the *continue* URL, not the handler host — a
 different field. It works, but recipients see a `firebaseapp.com` link on an
 email asking them to verify identity.
+
+**Second correction 2026-08-03: `authDomain` is the wrong lever.** The link
+host in a Firebase-sent email comes from `notification.sendEmail.callbackUri`
+in the Auth config — a server-side field, currently
+`https://room-selector.firebaseapp.com/__/auth/action`. The client's
+`authDomain` governs OAuth popup/redirect flows, which this product does not
+use; email-link sign-in calls `signInWithEmailLink` against the current URL
+directly. Both values happen to be the same string here, which is why the
+mistake was not obvious. To brand the link, PATCH `callbackUri` — editing
+`src/firebase.js` would have changed nothing.
 
 Verified the switch is viable: **both hostnames really serve the handler** —
 `curl https://www.roomselector5000.com/__/auth/action` returns the actual

@@ -7,6 +7,8 @@ import SubmissionForm from './components/SubmissionForm';
 import AdminDashboard from './components/AdminDashboard';
 import ResultsView from './components/ResultsView';
 import SelectaBot, { BotLoading } from './components/SelectaBot';
+import Footer from './components/Footer';
+import { PrivacyPolicy, Terms } from './components/LegalPages';
 import { isReturningFromLink, completeSignIn } from './auth';
 
 function App() {
@@ -84,7 +86,12 @@ function App() {
         <Route path="/trip/:tripId" element={<SubmissionForm />} />
         <Route path="/admin/:tripId" element={<AdminDashboard />} />
         <Route path="/results/:tripId" element={<ResultsView />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
       </Routes>
+      {/* Outside <Routes> so the legal links are reachable from every page --
+          both a legal requirement and an AdSense approval requirement. */}
+      <Footer />
     </Router>
   );
 }
