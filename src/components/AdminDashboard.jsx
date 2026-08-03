@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { callFn } from '../firebase';
-import { BarChart3, Download, Lock, Loader, AlertCircle, Play, PlusCircle, Trash2 } from 'lucide-react';
+import { BarChart3, CheckCircle, Download, Lock, Loader, AlertCircle, Play, PlusCircle, Trash2 } from 'lucide-react';
 import { BotLoading } from './SelectaBot';
 
 export default function AdminDashboard() {
@@ -13,6 +13,9 @@ export default function AdminDashboard() {
   const [trip, setTrip] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  // Classified server-side by functions/couples.js so this panel and the
+  // resolver cannot disagree about who is a couple.
+  const [couplesRaw, setCouplesRaw] = useState({ pairs: [], pending: [] });
   const [showEmails, setShowEmails] = useState(false);
   const [adminKey, setAdminKey] = useState(searchParams.get('code') || '');
   const [error, setError] = useState('');
@@ -136,6 +139,7 @@ export default function AdminDashboard() {
       setTrip(data.trip);
       setRooms(data.rooms);
       setSubmissions(data.submissions);
+      setCouplesRaw(data.couples || { pairs: [], pending: [] });
       setShowEmails(true);
       setError('');
       return true;
@@ -250,6 +254,27 @@ export default function AdminDashboard() {
     a.href = url;
     a.download = `${trip.name.replace(/\s+/g, '-')}-submissions.json`;
     a.click();
+  };
+
+  // The organizer is the one party who may see addresses, so a submission
+  // with no displayName (written before P5.2) still shows as its email rather
+  // than as a blank row nobody can identify.
+  const nameOf = (sub) => sub?.displayName || sub?.email || 'Unknown';
+
+  // Server-side ids re-joined to the submissions already in hand.
+  const subsById = new Map(submissions.map((s) => [s.id, s]));
+  const couples = {
+    pairs: couplesRaw.pairs
+      .map(({ aId, bId }) => ({ a: subsById.get(aId), b: subsById.get(bId) }))
+      .filter((p) => p.a && p.b),
+    pending: couplesRaw.pending
+      .map((p) => ({
+        submission: subsById.get(p.id),
+        target: p.targetId ? subsById.get(p.targetId) : null,
+        claim: p.claim,
+        reason: p.reason,
+      }))
+      .filter((p) => p.submission),
   };
 
   // Calculate stats
@@ -670,6 +695,66 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+
+          {/* Bed sharing, and anything that did not resolve.
+              Before this, a pairing that failed to confirm was invisible:
+              both people were quietly allocated as singles and nobody was
+              told. The organizer is the only party who can see the addresses
+              behind the names, so they are the only one who can fix it. */}
+          {(couples.pairs.length > 0 || couples.pending.length > 0) && (
+            <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6"
+              data-testid="couples-panel">
+              <h2 className="text-xl font-bold text-gray-900 mb-3">Bed sharing</h2>
+
+              {couples.pairs.length > 0 && (
+                <ul className="space-y-1 mb-4">
+                  {couples.pairs.map(({ a, b }) => (
+                    <li key={a.id} className="text-sm text-gray-800 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                      <span>
+                        <strong>{nameOf(a)}</strong> and <strong>{nameOf(b)}</strong>
+                        {' '}— confirmed, one bed together
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {couples.pending.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-sm font-medium text-amber-900 mb-2">
+                    Not confirmed — these people will be allocated as singles
+                  </p>
+                  <ul className="space-y-2">
+                    {couples.pending.map((p) => (
+                      <li key={p.submission.id} className="text-sm text-amber-900">
+                        <strong>{nameOf(p.submission)}</strong>{' '}
+                        {p.reason === 'no-match' && (
+                          <>said they are sharing with &ldquo;{p.claim}&rdquo;, and nobody
+                          by that name has submitted. Either they have not submitted yet,
+                          or the name does not match what they entered.</>
+                        )}
+                        {p.reason === 'not-returned' && (
+                          <>chose <strong>{nameOf(p.target)}</strong>, who has not chosen
+                          them back yet.</>
+                        )}
+                        {p.reason === 'names-someone-else' && (
+                          <>chose <strong>{nameOf(p.target)}</strong>, who chose somebody
+                          else.</>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-amber-800 mt-3">
+                    Nothing is broken — allocation still runs. Ask them to check
+                    the name they picked, or remove and re-enter a submission
+                    below.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
 
         {/* Allocation Section */}
         {trip.status !== 'finalized' && submissions.length > 0 && (

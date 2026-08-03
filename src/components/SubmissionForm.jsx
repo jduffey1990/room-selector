@@ -12,6 +12,10 @@ import HowItWorks, { HOW_IT_WORKS_KEY } from './HowItWorks';
 
 const PRICE_INCREMENT = 25;
 
+// Sentinel for "my partner has not submitted yet". Not a real submission id,
+// and deliberately not the empty string, which already means "nobody".
+const CLAIM = '__claim__';
+
 export default function SubmissionForm() {
   const { tripId } = useParams();
   const navigate = useNavigate();
@@ -21,7 +25,15 @@ export default function SubmissionForm() {
   const [rooms, setRooms] = useState([]);
   
   const [email, setEmail] = useState('');
-  const [partnerEmail, setPartnerEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+
+  // Partner selection (P5.2). Nobody types an address here any more: you pick
+  // a person who has already submitted, or you type their NAME because they
+  // have not. A wrong name is recoverable by a human reading it; a wrong
+  // address is not, which is the failure this replaces.
+  const [partnerChoice, setPartnerChoice] = useState('');
+  const [partnerClaimName, setPartnerClaimName] = useState('');
+  const [participants, setParticipants] = useState([]);
   const [roomPrices, setRoomPrices] = useState([]);
   const [preferences, setPreferences] = useState([]);
   const [submitted, setSubmitted] = useState(false);
@@ -66,6 +78,22 @@ export default function SubmissionForm() {
     setAuthReady(true);
   }), []);
 
+  // Who can be picked as a partner. Names and opaque ids only — this response
+  // never contains an address (see listParticipantNames). A failure here is
+  // not fatal: the dropdown falls back to the type-a-name path, which is the
+  // same thing the first person to submit uses anyway.
+  useEffect(() => {
+    let cancelled = false;
+    callFn('listParticipantNames', { tripId })
+      .then((res) => {
+        if (!cancelled) setParticipants(res?.participants || []);
+      })
+      .catch((err) => {
+        console.warn('Could not load participant names:', err);
+      });
+    return () => { cancelled = true; };
+  }, [tripId]);
+
   // Returning from the emailed link: the bids were stashed before the round
   // trip and are submitted now, so clicking the link is the last step rather
   // than the point where someone has to retype everything.
@@ -76,7 +104,10 @@ export default function SubmissionForm() {
 
     resumed.current = true;
     setEmail(user.email || pending.email || '');
-    setPartnerEmail(pending.partnerEmail || '');
+    setDisplayName(pending.displayName || '');
+    setPartnerChoice(pending.partnerSubmissionId ? pending.partnerSubmissionId :
+      (pending.partnerClaimName ? CLAIM : ''));
+    setPartnerClaimName(pending.partnerClaimName || '');
     setPreferences(pending.preferences || []);
     if (Array.isArray(pending.roomPrices)) {
       const byId = new Map(pending.roomPrices.map((r) => [r.id, r.price]));
@@ -87,7 +118,9 @@ export default function SubmissionForm() {
     postSubmission({
       preferences: pending.preferences,
       roomPrices: pending.roomPrices,
-      partnerEmail: pending.partnerEmail || null,
+      displayName: pending.displayName || '',
+      partnerSubmissionId: pending.partnerSubmissionId || null,
+      partnerClaimName: pending.partnerClaimName || null,
     });
   }, [authReady, user, rooms, tripId]);
 
@@ -209,16 +242,21 @@ export default function SubmissionForm() {
       return;
     }
 
+    if (!displayName.trim()) {
+      alert('Please enter your name — it is how your trip-mates pick you as a bed partner');
+      return;
+    }
+
     if (preferences.length === 0) {
       alert('Please rank at least one room');
       return;
     }
 
-    // Same reason: comparing against the empty `email` let a signed-in user
-    // name themselves as their own partner and slip past this check.
-    if (partnerEmail.trim() &&
-        partnerEmail.trim().toLowerCase() === effectiveEmail.toLowerCase()) {
-      alert('Partner email must be a different person');
+    // The self-partner check that used to compare email addresses is gone,
+    // and so is the class of bug behind it: you cannot select yourself,
+    // because you are not in the list until you have submitted.
+    if (partnerChoice === CLAIM && !partnerClaimName.trim()) {
+      alert("Please enter your partner's name, or choose someone from the list");
       return;
     }
 
@@ -228,7 +266,10 @@ export default function SubmissionForm() {
     }
 
     const payload = {
-      partnerEmail: partnerEmail.toLowerCase().trim() || null,
+      displayName: displayName.trim(),
+      // Exactly one of these, never both — the callable rejects the pair.
+      partnerSubmissionId: partnerChoice && partnerChoice !== CLAIM ? partnerChoice : null,
+      partnerClaimName: partnerChoice === CLAIM ? partnerClaimName.trim() : null,
       preferences,
       roomPrices: roomPrices.map(r => ({ id: r.id, price: r.price })),
     };
@@ -389,8 +430,26 @@ export default function SubmissionForm() {
           </div>
         </div>
 
-        {/* Email Input */}
+        {/* Who you are, and who you are sharing with */}
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
+          <label htmlFor="display-name" className="block text-sm font-medium text-gray-700 mb-2">
+            Your Name
+          </label>
+          <input
+            id="display-name"
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            maxLength={40}
+            placeholder="e.g. Jordan D."
+            data-testid="display-name"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+          <p className="text-sm text-gray-500 mt-2 mb-4">
+            How your trip-mates will pick you if you&rsquo;re sharing a bed.
+            Nobody sees your email address.
+          </p>
+
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Your Email
           </label>
@@ -414,20 +473,56 @@ export default function SubmissionForm() {
             </p>
           )}
 
-          <label className="block text-sm font-medium text-gray-700 mb-2 mt-4">
-            I'm sharing a bed with… <span className="text-gray-400 font-normal">(optional)</span>
+          {/* Pick a person, do not spell an address. Being named as
+              jordan@gmail.com by someone who then verified as
+              jduffey@gmail.com used to produce two singles and tell nobody. */}
+          <label htmlFor="partner-select" className="block text-sm font-medium text-gray-700 mb-2 mt-4">
+            I&rsquo;m sharing a bed with…{' '}
+            <span className="text-gray-400 font-normal">(optional)</span>
           </label>
-          <input
-            type="email"
-            value={partnerEmail}
-            onChange={(e) => setPartnerEmail(e.target.value)}
-            placeholder="partner.email@example.com"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-          />
+          <select
+            id="partner-select"
+            value={partnerChoice}
+            onChange={(e) => setPartnerChoice(e.target.value)}
+            data-testid="partner-select"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+          >
+            <option value="">Nobody — I have my own bed</option>
+            {participants.map((p) => (
+              <option key={p.submissionId} value={p.submissionId}>
+                {p.displayName}{p.hint ? ` (${p.hint})` : ''}
+              </option>
+            ))}
+            <option value={CLAIM}>Someone who hasn&rsquo;t submitted yet…</option>
+          </select>
+
+          {partnerChoice === CLAIM && (
+            <input
+              type="text"
+              value={partnerClaimName}
+              onChange={(e) => setPartnerClaimName(e.target.value)}
+              maxLength={40}
+              placeholder="Their name, e.g. Kate"
+              data-testid="partner-claim-name"
+              className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          )}
+
           <p className="text-sm text-gray-500 mt-2">
-            You'll be assigned one bed together and each pay its per-person
-            price. This only takes effect if they also submit and enter your
-            email here — otherwise you're both allocated as singles.
+            {partnerChoice === CLAIM ? (
+              <>
+                They pick you from this list when they submit, and you&rsquo;ll
+                be assigned one bed together. Their name only needs to be close
+                enough for your organizer to recognise — nobody has to spell an
+                email address.
+              </>
+            ) : (
+              <>
+                You&rsquo;ll be assigned one bed together and each pay its
+                per-person price. This takes effect once you have both named
+                each other — otherwise you are allocated as singles.
+              </>
+            )}
           </p>
         </div>
 
@@ -537,9 +632,15 @@ export default function SubmissionForm() {
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6">
           <button
             onClick={handleSubmit}
+            // Every condition here must match a guard in handleSubmit, or the
+            // button enables onto a dead end — which is exactly how signed-in
+            // users were once blocked by a "Please enter your email" alert
+            // while the field showed their address.
             disabled={
               !isBalanced ||
               !(user?.email || email.trim()) ||
+              !displayName.trim() ||
+              (partnerChoice === CLAIM && !partnerClaimName.trim()) ||
               preferences.length === 0 ||
               sendingLink
             }

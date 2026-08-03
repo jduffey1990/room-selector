@@ -133,6 +133,22 @@ const context = await newContext();
 
 const card = (name) => `[data-testid="room-card"]:has(h3:text-is("${name}"))`;
 
+/**
+ * Display name for a demo address: demo-anna@example.com -> "Anna".
+ *
+ * Derived rather than passed so the call sites below stay readable as a
+ * scenario. Participants are identified to each other by name now, but the
+ * harness still keys everything off the address, which is what the token
+ * carries and what the allocation is checked against.
+ *
+ * @param {string} email A demo participant address.
+ * @return {string} The display name they submit under.
+ */
+function nameFor(email) {
+  const local = email.split('@')[0].replace(/^demo-/, '');
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+
 async function submitParticipant(email, prefOrder, adjustments = {}, partner = null) {
   const ctx = await newContext();
   const page = await ctx.newPage();
@@ -182,9 +198,31 @@ async function submitParticipant(email, prefOrder, adjustments = {}, partner = n
   }
 
   // Own-email field renders disabled once signed in (value comes from the
-  // token), so it is not filled here. The partner field is still the second
-  // email input and still editable.
-  if (partner) await page.locator('input[type="email"]').nth(1).fill(partner);
+  // token), so it is not filled here. The name is new in P5.2 and required:
+  // it is how a partner picks you.
+  await page.locator('[data-testid="display-name"]').fill(nameFor(email));
+
+  // Partner selection, by person rather than by spelled address (P5.2).
+  // Whichever of the pair submits FIRST cannot see the other yet and types a
+  // name; the second picks them from the dropdown. Both halves run in this
+  // scenario -- anna claims "Alex" before he exists, alex then selects "Anna"
+  // -- so a regression in either path fails here rather than silently
+  // allocating a couple as two singles.
+  if (partner) {
+    const wanted = nameFor(partner);
+    const select = page.locator('[data-testid="partner-select"]');
+    const labels = (await select.locator('option').allTextContents())
+        .map((t) => t.trim());
+    // Names collide only when two people share one, in which case the option
+    // carries a masked address in brackets -- match the prefix, not equality.
+    const hit = labels.find((l) => l === wanted || l.startsWith(`${wanted} (`));
+    if (hit) {
+      await select.selectOption({label: hit});
+    } else {
+      await select.selectOption('__claim__');
+      await page.locator('[data-testid="partner-claim-name"]').fill(wanted);
+    }
+  }
 
   for (const roomName of prefOrder) {
     await page.locator(`${card(roomName)} button:text-is("Add to Preferences")`).click();

@@ -12,7 +12,7 @@ const {sendResultsEmails} = require("./email");
 const listingImport = require("./listing-import");
 const cascade = require("./trip-cascade");
 const {
-  MAX_DISPLAY_NAME, normalizeName, maskEmail, resolveCouples,
+  MAX_DISPLAY_NAME, normalizeName, maskEmail, resolveCouples, classifyCouples,
 } = require("./couples");
 
 admin.initializeApp();
@@ -426,11 +426,27 @@ exports.getAdminData = onCall(opts, async (request) => {
     db.collection("submissions").where("tripId", "==", tripId).get(),
   ]);
 
+  const submissions = subsSnap.docs.map((d) => ({id: d.id, ...d.data()}));
+
+  // Classified here, not in the browser, so the dashboard and the resolver
+  // cannot drift into disagreeing about who is a couple. Ids only -- the
+  // client already holds the submissions these refer to.
+  const {pairs, pending} = classifyCouples(submissions);
+
   return {
     trip: {id: tripSnap.id, ...tripSnap.data()},
     participantCode: codes.participantCode,
     rooms: roomsSnap.docs.map((d) => ({id: d.id, ...d.data()})),
-    submissions: subsSnap.docs.map((d) => ({id: d.id, ...d.data()})),
+    submissions,
+    couples: {
+      pairs: pairs.map((p) => ({aId: p.a.id, bId: p.b.id})),
+      pending: pending.map((p) => ({
+        id: p.submission.id,
+        claim: p.claim,
+        targetId: p.target ? p.target.id : null,
+        reason: p.reason,
+      })),
+    },
   };
 });
 

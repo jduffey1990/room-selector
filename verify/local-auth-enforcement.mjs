@@ -105,7 +105,10 @@ const payload = {
   tripId: trip.id,
   preferences: rooms.slice(0, 2).map((r) => r.id),
   roomPrices,
-  partnerEmail: null,
+  // Required since P5.2. partnerEmail is deliberately absent: the callable no
+  // longer accepts one from a client at all, and passing it would prove
+  // nothing about the check this harness exists to make.
+  displayName: 'Auth Check',
 };
 
 // 1. No token at all.
