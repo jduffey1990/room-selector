@@ -591,7 +591,7 @@ callables plus dashboard UI:
 ### P5 — The first-timer's pass (owner-requested 2026-08-03, third session)
 
 Everything through P4 makes the mechanism *correct*. P5 is about whether a
-person who has never seen this product can drive it. Five places in the
+person who has never seen this product can drive it. Four places in the
 create → join → submit journey leave someone guessing or make them work too
 hard to say a simple thing, and that is expensive here in a specific way: a
 person who misunderstands the form submits a ballot that does not say what
@@ -601,13 +601,16 @@ this repo — it fails silently.
 
 None of these is a crash. Every one of them returns HTTP 200.
 
-5.1–5.3 were the owner's original three; **5.4 and 5.5 were promoted out of
-"Later" in the same session**, because drag-rank and the ranking assist are
-the same problem seen from the other end — not "why is this confusing" but
-"why is this so much work to say."
+5.1–5.3 were the owner's original three; **5.4 (drag-rank) was promoted out of
+"Later" in the same session**, because it is the same problem seen from the
+other end — not "why is this confusing" but "why is this so much work to say."
 
-**5.4 is the only P5 item with no external dependency** and can ship alone.
-5.5 is blocked on an owner-created API key, like P0 before it.
+**P5 is deliberately UI-only.** The AI ranking assist was specced alongside
+5.4 and then **re-parked the same day (owner, 2026-08-03)** so that nothing
+here waits on an API key. Its design, its data-dependency finding, and its
+key decision are kept intact under "Later" — read them there before rebuilding
+any of it. The one server-side piece left in P5 is 5.2's
+`listParticipantNames`, which needs no external service.
 
 **5.1 Listing import: say what to paste.**
 
@@ -631,16 +634,32 @@ after a failure, and never says that a URL does nothing.
   free and the message is the only place a user learns the constraint.
 - Voice: this is instruction copy about a thing that costs money, so it is
   literal. Retro flourish stays in the panel heading.
-- **Noticed while specifying P5.5, not folded into it:** `extractListing`
-  returns `notes` — what the model could not work out — and
+- **Persist the extraction notes — DECIDED 2026-08-03 (owner).**
+  `extractListing` returns `notes` (what the model could not work out) and
   [TripCreator.jsx:61](src/components/TripCreator.jsx#L61) renders it in the
-  amber panel, but `createTrip` is never sent it. **It dies at submit.** So
-  "the listing said sleeps 12, I only found 10 beds" is visible for exactly
-  one screen and is gone from the trip forever, including from the organizer
-  who might reread it later. Persisting it onto the trip doc is a few lines;
-  whether that is wanted is a real question, not an obvious yes — it is a
-  machine's uncertainty note, and P2.1/P3 would then owe it a retention rule
-  like every other stored field. Owner's call.
+  amber panel, but `createTrip` is never sent it, so it **dies at submit**.
+  "The listing said sleeps 12, I only found 10 beds" is visible for exactly
+  one screen and then gone — including from the organizer, who is the person
+  most likely to want it a week later when someone asks where the eleventh
+  bed is. Keep it.
+  - Store it as **`importNotes` on the trip document**, capped like every
+    other string field. That is the right home for three reasons: it describes
+    the *property*, not any person; P3 retention already cascades the trip
+    doc, so it inherits the 6-month rule for free instead of needing a new
+    one; and `updateTrip` already owns that document.
+  - **Compatible with the security invariant, and worth stating why:**
+    `trips/{id}` is world-readable, and `importNotes` holds no email, no code,
+    and nothing about a participant — only what a listing did or didn't say.
+    No `firestore.rules` change. **Render it in the admin dashboard only** —
+    it is organizer context, and a participant reading "the model wasn't sure
+    about bed 7" gains nothing and may distrust a bed list the organizer has
+    already corrected.
+  - **`updateTrip` must clear it when the bed list changes.** The note
+    describes an extraction, not the current beds; once the organizer edits
+    them it can be actively wrong, and a stale warning is worse than none.
+  - No P2.1 privacy-policy change expected: the policy enumerates *personal*
+    data and this is property metadata. Re-read the wording when implementing
+    rather than assuming it still reads true.
 
 > **Acceptance:** a first-time organizer who pastes an Airbnb URL is told why
 > that cannot work and what to do instead, without an API call; the formats
@@ -740,9 +759,12 @@ understanding it explains it nowhere.
 - Voice: the dialog explains *why adjustments sum to zero* and *why ranking
   honestly is the right move*, restated from `ARCHITECTURE.md` rather than
   re-derived. **It must not coach anyone toward a winning bid** — the
-  mechanism is not strategyproof (`ARCHITECTURE.md:93-96`), and the constraint
-  spelled out in P5.5 binds this copy too. Helping someone express what they
-  want is the goal; helping them win breaks the property being sold.
+  mechanism is not strategyproof (`ARCHITECTURE.md:93-96`), and the
+  never-help-them-win constraint under "Later → AI ranking assist" binds this
+  copy too. It is not only about a future callable: prose that explains how to
+  bid *well* rather than how to bid *honestly* breaks the same property, and
+  this dialog is the most likely place to write it by accident. Helping
+  someone express what they want is the goal; helping them win is not.
 - The dialog and tooltips live inside `data-ad-free="submission"`
   ([SubmissionForm.jsx:313](src/components/SubmissionForm.jsx#L313)). P2.2
   forbids ad markup in money or fairness UI and new UI does not get an
@@ -774,131 +796,6 @@ rest of P5: the ballot should be easy to make say what the person means.
 > chevrons still work and still carry the same labels; keyboard reordering
 > works; zero console errors at 390px and desktop, dark mode.
 
-**5.5 AI ranking assist (owner-requested 2026-08-03; promoted from "Later").**
-
-Someone who knows they want "my own bathroom and a door that closes, and I'd
-rather save money than have a view" still has to translate that into an
-ordering plus a set of adjustments summing to zero. The assist does that
-translation and hands
-back a **draft the person edits**, in exactly the same shape as P0's listing
-import: a suggestion, never a commitment, and nothing is submitted until they
-submit it.
-
-**The constraint is the whole feature, so it is stated first and it is not
-negotiable.** From the parked note, carried over verbatim in force:
-
-> The assist helps someone *express what they actually want*. It must never
-> help them *win*: the mechanism is not strategyproof, and coaching bid-shading
-> would break the exact property the product sells. If a user asks how to game
-> it, the honest answer is that bidding true values is what makes the result
-> defensible.
-
-Concretely, that means the callable is forbidden from reasoning about **other
-participants** at all. It never sees another person's bids, it is never told
-how many people have submitted, and its prompt gives it no notion of winning.
-`ARCHITECTURE.md:93-96` explains why: the mechanism is manipulable in
-principle, and what actually holds it together is that these are friends who
-don't see each other's bids. An assistant that coached shading would be the
-thing that breaks that, and it would break it at scale.
-
-**Precondition — the whole feature rests on `rooms[].description`, and that
-field is optional.** Checked 2026-08-03 rather than assumed, because the
-answer decides whether this is worth building:
-
-- **What the trip actually stores per bed** is `name`, `description` (≤300
-  chars, [functions/index.js:201](functions/index.js#L201)), `basePrice`,
-  `capacity`, `type`. That is the entire ranking surface. There is no floor
-  plan, no adjacency, no room-to-room relationship of any kind.
-- **When descriptions are populated, they are exactly right.** The extractor's
-  schema asks for "anything that would change how much someone wants it:
-  ensuite, view, stairs, no window, shared with another bed", and the fixtures
-  bear it out — `Ensuite bath, fireplace, mountain view`, `Shares hall bath`,
-  `Open loft, no door`, `Under the stairs`. So "I want my own bathroom", "no
-  stairs", and "I need a door" are all answerable.
-- **Adjacency is not.** "A bed *near* a bathroom" cannot be answered — `Shares
-  hall bath` says a bath is shared, not where it is. Do not let the assist
-  imply otherwise; do not add a floor-plan model to make it possible.
-- **`createTrip` requires only `name`.** A hand-typed trip can have every
-  description empty, and then the assist has bed type, capacity, and the
-  organizer's `basePrice` and nothing else. It could still order king > bunk >
-  floor while sounding exactly as confident.
-
-So: **gate the assist on description coverage.** If most beds on the trip have
-an empty `description`, either don't offer it or say plainly that it is
-ordering by bed type alone. A confident ranking built on absent data is the
-same silent failure as every other bug in this repo — nothing errors, the
-ballot is just wrong.
-
-- New callable **`suggestRanking`**: free-text preferences + this trip's bed
-  list in, `{preferences: [roomId], roomPrices: [{id, price}], notes}` out.
-  (P5 adds two callables in total, this one and P5.2's
-  `listParticipantNames` — whichever ships first is the 8th.)
-- **The assist is stateless, like `extractListing`.** No chat id, no
-  conversation id, no stored transcript, and the person's free-text
-  description is not persisted — it is a means to a draft, not a record.
-  Storing it would put an unstructured statement of what someone wants
-  next to the money they pay, for no allocation benefit, and hand P3
-  retention a field it has no rule for.
-- **Structured outputs (`output_config.format` + JSON schema), not ad-hoc tool
-  calling** — same reasoning as P0: the response feeds a money form, so it must
-  be parseable by construction rather than by hand-written repair.
-- **The zero-sum rule is enforced in code after the model returns, not asked
-  for in the prompt.** A model that returns adjustments summing to $25 must not
-  be able to produce a ballot the client then rejects — normalize or reject
-  server-side. `submitPreferences` re-validates regardless
-  ([functions/index.js:293-298](functions/index.js#L293-L298)); this is about
-  not handing someone a broken draft.
-- **Model: decide by measurement, not by inheriting P0's answer.** This is a
-  different task from extraction — short input, a judgment about what someone
-  meant. Start at `claude-opus-5` and sweep down; extend
-  `verify/preview-listing-import.cjs --sweep` (or copy its shape) so the choice
-  is a measured one with the numbers in the commit message, exactly as the
-  haiku decision was. Do not assume `claude-haiku-4-5` transfers.
-- App Check enforced (participant-facing and costs money per call — a bigger
-  spam target than `extractListing`, which at least sits behind trip creation).
-  Cap it hard, and cap it *per submission*, not just globally.
-- **The draft lands in the form, never in Firestore.** Same acceptance shape as
-  P0: with no key set, the form stays fully usable by hand and the assist
-  degrades to a logged skip. It must never block a submission.
-
-**API key — decided 2026-08-03: a second, separate `ANTHROPIC_API_KEY_ASSIST`
-secret, not a reuse of P0's key.** Checked against the live API docs rather
-than assumed, because two of the three intuitive reasons to split are wrong:
-
-- **Rate limits do NOT separate per key.** They are set **per organization**
-  (`platform.claude.com/docs/en/api/rate-limits`), with optional *lower* caps
-  per **workspace**. A second key buys zero additional capacity and zero
-  isolation — a runaway assist would still consume the same RPM/ITPM pool that
-  `extractListing` draws on. Only a separate workspace can fence that off, and
-  a workspace cap is a **ceiling, not a reservation**.
-- **Cost attribution in dollars is by workspace, not by key.** The Cost API
-  groups by `workspace_id` and `description` only. The **Usage** API does
-  filter and group by `api_key_ids[]` — so a separate key gives per-feature
-  *token* attribution, which the docs explicitly call the recommended cost
-  proxy when many keys are in play. Good enough here; both features run on
-  known per-call costs.
-- **The real reason to split is revocation.** The assist is participant-facing
-  — roughly one caller per bed per trip, versus one organizer — so it is the
-  more exposed surface. A separate key means abuse of the assist is killed by
-  revoking one secret, and trip creation keeps working. That alone justifies
-  it; the other two arguments do not.
-
-Consequence to accept deliberately: **two secrets to rotate, and the
-graceful-degradation path must be implemented twice, independently.** That is
-a feature — one dead key must not take both features down.
-
-If the owner later wants true dollar-level separation or a hard spend ceiling
-on the assist, the lever is a **separate workspace** (whose keys then serve
-this callable), not more keys. Owner's call, owner's account — same rule as
-Brevo and AdSense.
-
-> **Acceptance:** a plain-English description of what someone wants produces a
-> ranking and a balanced set of adjustments they only have to adjust, not
-> build; the adjustments sum to zero before the draft is ever shown; asking the
-> assist how to win the allocation gets the honest answer from the constraint
-> above, not a strategy; with no assist key set, the submission form works
-> exactly as it does today.
-
 ---
 
 ## Later (parked — constraints still bind)
@@ -906,9 +803,61 @@ Brevo and AdSense.
 - ~~**Listing import.**~~ **Promoted 2026-08-03 — now P0.** The
   ad-vignette-before-the-AI-call idea stays parked with P2.2 (needs the
   owner's AdSense account).
-- ~~**Drag-rank + AI assist.**~~ **Promoted 2026-08-03 — now P5.4 (drag-rank)
-  and P5.5 (the assist).** The never-help-them-win constraint moved with it and
-  is quoted in full there; it did not soften on the way.
+- ~~**Drag-rank**~~ **promoted 2026-08-03 — now P5.4.** It needed no key and
+  no callable, so it went with the rest of the first-timer's pass.
+
+- **AI ranking assist — specced 2026-08-03, then deliberately re-parked the
+  same day (owner).** Not blocked, not abandoned: descoped so P5 stays UI-only
+  and ships without waiting on an API key. The work already done is below so
+  nobody re-derives it.
+
+  **The constraint, which does not expire while parked:**
+
+  > The assist helps someone *express what they actually want*. It must never
+  > help them *win*: the mechanism is not strategyproof, and coaching
+  > bid-shading would break the exact property the product sells. If a user
+  > asks how to game it, the honest answer is that bidding true values is what
+  > makes the result defensible.
+
+  Mechanically that means the callable must never reason about other
+  participants at all — it never sees another person's bids and is never told
+  how many people have submitted. `ARCHITECTURE.md:93-96` is why: the mechanism
+  is manipulable in principle, and what actually holds it together is that
+  these are friends who cannot see each other's bids. An assistant that coached
+  shading would break precisely that, at scale.
+
+  **The finding that decides whether it is worth building** (measured
+  2026-08-03, not assumed): the only ranking surface a trip stores is
+  `rooms[].name` / `description` (≤300 chars) / `basePrice` / `capacity` /
+  `type`. No floor plan, no adjacency, no room-to-room relationship.
+  - Answerable when `description` is populated, and the extractor is prompted
+    for exactly this: ensuite vs shared bath, ground floor vs under-the-stairs,
+    a door that closes vs an open loft, view vs none.
+  - **Not** answerable: "near a bathroom." `Shares hall bath` says a bath is
+    shared, not where it is. Do not add a floor-plan model to make it possible.
+  - **`createTrip` requires only `name`**, so a hand-typed trip can have every
+    `description` empty — and the assist would rank on bed type alone while
+    sounding just as confident. Any build must gate on description coverage and
+    say when it is ordering by type alone.
+
+  **Design decisions already made:** `suggestRanking` callable; structured
+  outputs, not ad-hoc tool calling (the draft feeds a money form); the zero-sum
+  rule enforced in code after the model returns, never merely asked for in the
+  prompt; stateless, with the person's free-text description never persisted;
+  App Check on, capped per submission; model chosen by a fresh sweep starting
+  at `claude-opus-5` rather than inheriting P0's haiku result, since extraction
+  and judging-what-someone-meant are different tasks.
+
+  **Key decision, still valid: a separate `ANTHROPIC_API_KEY_ASSIST`, and only
+  for one of the three usual reasons.** Checked against the live API docs:
+  rate limits are **per organization**, not per key, so a second key buys zero
+  isolation (only a separate *workspace* can fence that off, and it is a
+  ceiling, not a reservation); dollar-level cost attribution is by
+  `workspace_id`, not by key, though the Usage API *does* group by
+  `api_key_ids[]` for per-feature token attribution. What justifies the split
+  is **revocation**: the assist is participant-facing — roughly one caller per
+  bed, versus one organizer — so killing an abused assist must not take trip
+  creation down with it.
 - **Equal-budget bidding** (the real answer to wealth leaking into
   allocations, and to manipulation among strangers) and a pro tier.
 - **Small polish, grab when touching the client:** replace the default Vite
@@ -948,21 +897,22 @@ being asked. A session isn't finished until its hand-off is.
 done and verified.
 
 **The code work now is P5 — the first-timer's pass**, specced in the roadmap
-above during the third session on 2026-08-03 and **not started**. It is UI and
-two new callables, not mechanism: the allocator, the auditor, and the stored
-`partnerEmail` shape are all deliberately untouched by it.
+above during the third session on 2026-08-03 and **not started**. It is UI
+plus one new callable, not mechanism: the allocator, the auditor, and the
+stored `partnerEmail` shape are all deliberately untouched by it. **Nothing in
+P5 waits on an owner action or an external service** — that is why the AI
+ranking assist was re-parked rather than kept in.
 
 - **Start with P5.4** if you want something that ships today — drag-rank needs
   no key, no callable, and no owner action.
 - **Read P5.2 before touching the partner flow.** The dropdown-ordering problem
   is the part that looks simple and is not.
-- **Read P5.5's constraint before writing a line of the assist.** It must never
-  coach someone toward a winning bid; that is the property the product sells.
 - **Read the harness note under "Production failure modes"** before touching
   any copy on the submission form.
-- P5.5 needs `ANTHROPIC_API_KEY_ASSIST` — **owner's to create**, deliberately
-  separate from P0's key. The reasoning, including which of the usual
-  arguments for splitting are factually wrong, is written out in P5.5.
+- 5.1 now includes **persisting `importNotes` onto the trip doc** (decided by
+  the owner 2026-08-03). Small, but it touches `createTrip`, `updateTrip`, and
+  the dashboard — and `updateTrip` must *clear* it when beds change, or the
+  organizer keeps reading a warning about a bed list that no longer exists.
 
 Everything else outstanding is owner-blocked, not repo-blocked:
 
