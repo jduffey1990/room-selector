@@ -74,7 +74,21 @@ const results = [];
 function isHeadlessArtifact(text) {
   // Same narrow allowance as e2e-napa-flow.mjs: the reCAPTCHA iframe App Check
   // loads cannot get third-party storage access in headless Chromium.
-  return text.includes('requestStorageAccess: Permission denied');
+  if (text.includes('requestStorageAccess: Permission denied')) return true;
+
+  // Chrome reporting that GOOGLE's own report-only CSP was violated by their
+  // reCAPTCHA frame. Not ours and not fixable by us: the policy is served by
+  // google.com, and "report-only ... no further action has been taken" means
+  // nothing was blocked -- App Check tokens still issue, submissions still
+  // succeed. Confirmed to come from App Check rather than from ads: it first
+  // appeared on /admin, which loads no ad code at all.
+  //
+  // Matched narrowly ON THE REPORT-ONLY WORDING. If Google ever enforces this
+  // policy the message loses "report-only" and stops matching -- which is what
+  // should happen, because an enforced frame-ancestors would break reCAPTCHA
+  // and take every callable with it. That is a real failure, not noise.
+  return text.includes('report-only Content Security Policy') &&
+      text.includes('frame-ancestors');
 }
 
 const browser = await chromium.launch();

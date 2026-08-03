@@ -67,8 +67,25 @@ const consoleErrors = [];
 const failures = [];
 let checks = 0;
 
-/** @param {string} t @returns {boolean} known headless-only artifact */
-const isHeadlessArtifact = (t) => t.includes('requestStorageAccess: Permission denied');
+/**
+ * Console noise that is not this app's fault. Kept deliberately narrow -- the
+ * zero-console-errors gate is the most valuable assertion in these harnesses.
+ *
+ * 1. Headless Chromium refuses third-party storage access to the reCAPTCHA
+ *    iframe App Check loads.
+ * 2. Chrome reporting that GOOGLE's own REPORT-ONLY CSP was violated by their
+ *    reCAPTCHA frame. Served by google.com, unfixable here, and nothing is
+ *    blocked. Matched on the report-only wording on purpose: if Google ever
+ *    enforces it, the message changes, this stops matching, and the run fails
+ *    -- correctly, because an enforced frame-ancestors would break reCAPTCHA
+ *    and every callable behind App Check with it.
+ *
+ * @param {string} t The console message.
+ * @returns {boolean} True if this is known third-party noise.
+ */
+const isHeadlessArtifact = (t) =>
+  t.includes('requestStorageAccess: Permission denied') ||
+  (t.includes('report-only Content Security Policy') && t.includes('frame-ancestors'));
 
 function check(label, ok, detail) {
   checks++;

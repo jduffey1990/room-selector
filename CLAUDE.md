@@ -94,7 +94,7 @@ limits. Do not restate that content here.
 | Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
 | Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
 | Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
-| Trip lifecycle (P4) | **COMPLETE 2026-08-03.** Five admin-gated callables, all reachable from the dashboard including the `updateTrip` edit form. Both former gaps closed and verified in production by `verify/p4-lifecycle.mjs` (24/24): the edit form persists and refuses once anyone has submitted; reopen → re-allocate yields a fresh **envy-free** result (envyPairs=0, budget error 1.42e-14). |
+| Trip lifecycle (P4) | **COMPLETE 2026-08-03.** Five admin-gated callables, all reachable from the dashboard including the `updateTrip` edit form. Both former gaps closed and verified in production by `verify/p4-lifecycle.mjs` (25/25): the edit form persists and refuses once anyone has submitted; reopen → re-allocate yields a fresh **envy-free** result (envyPairs=0, maxEnvy=0, budget error 0). |
 | Trip dates | **Collected 2026-08-03** (optional `startDate`/`endDate`, YYYY-MM-DD strings on the trip doc). |
 | Retention (P3) | **Cron deployed, DRY RUN.** `purgeExpiredTrips`, monthly 09:00 UTC on the 1st. Deletes nothing until `RETENTION_ENABLED=true`. Cascade extracted to `functions/trip-cascade.js` and shared with `seed --clean`. |
 | Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
@@ -556,13 +556,18 @@ callables plus dashboard UI:
 
 > **Acceptance — MET 2026-08-03.** Every operation exercised through the
 > dashboard on `[demo]` trips in production. `verify/p4-lifecycle.mjs`,
-> 24/24, zero console errors, 390px for the edit form and desktop for
+> 25/25, zero console errors, 390px for the edit form and desktop for
 > allocation: the edit form persists name/cost/beds and leaves no orphaned
 > rooms, and refuses with an explanation once anyone has submitted; reopen
 > cleared 3 assignments and kept all 4 ballots; re-allocation produced 3
-> fresh assignment docs with **envyPairs=0, maxEnvy=0**, budget error
-> 1.42e-14. `requireAdmin` rejects participant codes in one place for all
-> five callables.
+> fresh assignment docs with **envyPairs=0, maxEnvy=0**, budget error 0,
+> welfare/person 51.25. `requireAdmin` rejects participant codes in one
+> place for all five callables.
+>
+> The first 24/24 run of this harness was **not** valid evidence — the
+> auditor was nondeterministic on production data (see the couples bug in
+> Shipped below). The figures above are from a run reproduced after that
+> fix.
 
 ---
 
@@ -630,17 +635,19 @@ complete and P2.2's code half is done and verified. What is left is not code:
      6-month deletion in writing; nothing is deleted until the owner reviews
      a cron log and sets `RETENTION_ENABLED=true`.
 
-3. **Found 2026-08-03, needs the owner's decision — 18 orphaned
-   submissions.** `submissions` holds 18 documents from the January 2026
-   trip carrying **real email addresses** and **no `tripId` field at all**
-   (pre-dating the multi-trip schema; their trip document is gone).
-   Retention cannot reach them: `findExpiredTrips` iterates `trips` and
-   `collectTripRefs` queries `where("tripId","==",id)`, so a submission with
-   no trip is never a candidate. They are ~6 months old and the published
-   policy says they should be deleted. **Not deleted by this session** —
-   "do not ship unattended" forbids deleting production data the session did
-   not create. Options: delete them, or backfill a `tripId` so retention
-   sweeps them normally.
+3. **RESOLVED 2026-08-03 (owner).** The 18 legacy submissions from the
+   January 2026 trip — real email addresses, no `tripId` field, their trip
+   document long gone — were deleted by the owner. `submissions` is now
+   empty of orphans.
+
+   The structural gap they exposed is worth remembering: **retention cannot
+   see a submission that has no `tripId`.** `findExpiredTrips` iterates
+   `trips` and `collectTripRefs` queries `where("tripId","==",id)`, so an
+   equality filter never matches a document missing the field. Any future
+   path that removes a trip document without going through
+   `functions/trip-cascade.js` will orphan its submissions the same way, and
+   the published 6-month promise will silently not apply to them. The cascade
+   module is the only safe deletion route.
 
 Rules of engagement while unattended:
 
