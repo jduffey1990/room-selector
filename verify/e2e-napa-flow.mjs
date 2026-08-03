@@ -15,10 +15,31 @@
  */
 import {chromium} from 'playwright';
 import {mkdirSync} from 'node:fs';
+import {createRequire} from 'node:module';
+
+const require = createRequire(import.meta.url);
+const adminSdk = require('firebase-admin');
 
 const [tripId, participantCode, adminCode] = process.argv.slice(2);
 if (!tripId || !participantCode || !adminCode) {
   console.error('usage: node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>');
+  process.exit(2);
+}
+
+// P1.1 made submitPreferences reject anything without a verified session, and
+// a headless browser cannot click a link in a real inbox. generateSignInWith-
+// EmailLink builds the genuine magic link and returns it WITHOUT sending mail,
+// so the harness walks the real production journey — action handler, sign-in,
+// resumed submission — with no bypass in the callable and no mail to fake
+// addresses. Decided 2026-08-03 over a custom-token shortcut, which would have
+// verified that submission works given a session rather than that a person can
+// obtain one; the magic-link half is exactly where the bugs were.
+try {
+  adminSdk.initializeApp({
+    credential: adminSdk.credential.cert(require('../seed/serviceAccountKey.json')),
+  });
+} catch {
+  console.error('needs seed/serviceAccountKey.json (same key the seed script uses)');
   process.exit(2);
 }
 
@@ -30,26 +51,63 @@ const consoleErrors = [];
 const dialogs = [];
 
 const browser = await chromium.launch();
-const context = await browser.newContext({colorScheme: 'dark', viewport: {width: 1280, height: 900}});
-context.on('page', (page) => {
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push({url: page.url(), text: msg.text()});
+
+/**
+ * A fresh browser context with console/page-error capture attached.
+ *
+ * Every participant needs their own: Firebase Auth persists the session per
+ * origin, so sharing one context would sign every participant in as whoever
+ * signed in first, and the trip would be allocated over one ballot repeated.
+ */
+function newContext() {
+  const ctx = browser.newContext({colorScheme: 'dark', viewport: {width: 1280, height: 900}});
+  return ctx.then((c) => {
+    c.on('page', (page) => {
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') consoleErrors.push({url: page.url(), text: msg.text()});
+      });
+      page.on('pageerror', (err) => consoleErrors.push({url: page.url(), text: `pageerror: ${err.message}`}));
+    });
+    return c;
   });
-  page.on('pageerror', (err) => consoleErrors.push({url: page.url(), text: `pageerror: ${err.message}`}));
-});
+}
+
+const context = await newContext();
 
 const card = (name) => `[data-testid="room-card"]:has(h3:text-is("${name}"))`;
 
 async function submitParticipant(email, prefOrder, adjustments = {}, partner = null) {
-  const page = await context.newPage();
+  const ctx = await newContext();
+  const page = await ctx.newPage();
   page.on('dialog', async (d) => {
     dialogs.push({email, type: d.type(), message: d.message()});
-    await d.accept();
+    // completeSignIn() prompts for the address when it has no stashed
+    // submission — the normal "requested on a laptop, opened on a phone" path.
+    // Answer it; accepting blank would fail sign-in with a confusing error.
+    if (d.type() === 'prompt') await d.accept(email);
+    else await d.accept();
   });
+
+  // Sign in first. The form then short-circuits at SubmissionForm's
+  // `if (user?.email)` branch and posts directly, so no verification mail is
+  // ever generated for these fake addresses.
+  const link = await adminSdk.auth().generateSignInWithEmailLink(email, {
+    url: `${BASE}/`,
+    handleCodeInApp: true,
+  });
+  await page.goto(link);
+  // Wait for App.jsx's BotLoading to clear. 'detached' rather than a polled
+  // text check: if sign-in finishes before the first poll the label is already
+  // gone, and waiting for it to *appear* would hang on the fast path.
+  await page.waitForSelector('text=checking your verification link',
+      {state: 'detached', timeout: 30000});
+
   await page.goto(`${BASE}/#/trip/${tripId}`);
   await page.waitForSelector('h3:text-is("Main Bedroom")', {timeout: 30000});
 
-  await page.locator('input[type="email"]').nth(0).fill(email);
+  // Own-email field renders disabled once signed in (value comes from the
+  // token), so it is not filled here. The partner field is still the second
+  // email input and still editable.
   if (partner) await page.locator('input[type="email"]').nth(1).fill(partner);
 
   for (const roomName of prefOrder) {
@@ -69,7 +127,9 @@ async function submitParticipant(email, prefOrder, adjustments = {}, partner = n
   await page.locator('button:text-is("Submit Preferences")').click();
   await page.waitForSelector('text=Submitted!', {timeout: 30000});
   console.log(`submitted: ${email}`);
-  await page.close();
+  // Close the whole context, not just the page: the Auth session lives in
+  // context storage and would otherwise leak into the next participant.
+  await ctx.close();
 }
 
 // One couple via mutual partner confirmation (P1.2), plus two singles.
