@@ -453,10 +453,11 @@ export default function AdminDashboard() {
               <div className="space-y-4 mt-3">
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="edit-trip-name" className="block text-sm font-medium text-gray-700 mb-1">
                       Trip name
                     </label>
                     <input
+                      id="edit-trip-name"
                       type="text"
                       value={draft.name}
                       onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -464,10 +465,11 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="edit-trip-cost" className="block text-sm font-medium text-gray-700 mb-1">
                       Total trip cost ($)
                     </label>
                     <input
+                      id="edit-trip-cost"
                       type="number"
                       min="0"
                       value={draft.totalTripCost}
@@ -495,10 +497,11 @@ export default function AdminDashboard() {
 
                       <div className="grid sm:grid-cols-2 gap-4 mb-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor={`edit-bed-name-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
                             Bed name *
                           </label>
                           <input
+                            id={`edit-bed-name-${index}`}
                             type="text"
                             value={room.name}
                             onChange={(e) => updateDraftRoom(index, 'name', e.target.value)}
@@ -506,10 +509,11 @@ export default function AdminDashboard() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor={`edit-bed-type-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
                             Type
                           </label>
                           <select
+                            id={`edit-bed-type-${index}`}
                             value={room.type}
                             onChange={(e) => updateDraftRoom(index, 'type', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-selecta-teal"
@@ -526,10 +530,11 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor={`edit-bed-desc-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
                           Description
                         </label>
                         <input
+                          id={`edit-bed-desc-${index}`}
                           type="text"
                           value={room.description}
                           onChange={(e) => updateDraftRoom(index, 'description', e.target.value)}
@@ -539,10 +544,11 @@ export default function AdminDashboard() {
 
                       <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor={`edit-bed-price-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
                             Price adjustment ($)
                           </label>
                           <input
+                            id={`edit-bed-price-${index}`}
                             type="number"
                             value={room.basePrice}
                             onChange={(e) => updateDraftRoom(index, 'basePrice', e.target.value)}
@@ -550,10 +556,11 @@ export default function AdminDashboard() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor={`edit-bed-capacity-${index}`} className="block text-sm font-medium text-gray-700 mb-1">
                             Capacity
                           </label>
                           <input
+                            id={`edit-bed-capacity-${index}`}
                             type="number"
                             min="1"
                             value={room.capacity}
