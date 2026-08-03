@@ -91,7 +91,9 @@ limits. Do not restate that content here.
 | Couples | Mutual `partnerEmail` confirmation. The `+copy` hack no longer forms couples. |
 | Design system | Selecta-bot (cream/teal/coral, bot states), all six views verified at 390px, dark mode, zero console errors |
 | Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
-| Email | **Built, not deployed.** P1.1 + P1.2 are committed and verified locally; deploying is blocked on Firebase Auth being enabled (see P1.1). Production today still accepts any address and hand-delivers results. |
+| Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
+| Email | **Built, not deployed.** P1.1 + P1.2 are committed and verified locally. The Auth blocker is cleared; what remains is the deploy itself. **Known risk: the verification email landed in spam (n=1) — see P1.4.** Production today still accepts any address and hand-delivers results. |
+| Listing import | **In progress** — owner-requested 2026-08-03, promoted from parked. See P0. |
 | Trip dates | **Not collected.** Blocks retention (P3). |
 | App Check / privacy policy / ads | None yet — P2. |
 
@@ -142,32 +144,107 @@ custom-domain certs live. Proofs live in `verify/`; theory in
 
 ## Roadmap — next pass
 
+### P0 — Listing import (owner-requested 2026-08-03; promoted from "Later")
+
+The owner has a real trip coming up and does not want to hand-type beds.
+**Scope change from the parked version: upload a document, not just paste
+text.** Organizer uploads (or pastes) the listing; Claude extracts rooms,
+beds, and total cost; the create form is pre-filled; **the organizer always
+reviews and edits before submit.** Extraction is a suggestion, never a
+commitment — nothing is written to Firestore until the organizer submits the
+form themselves.
+
+Still deliberately **paste/upload, not scrape.** URL scraping violates Airbnb
+ToS, fights bot detection, and gets Cloud Function IPs blocked. That
+constraint is unchanged by the promotion.
+
+- Callable `extractListing` (7th callable). Model `claude-opus-5` via
+  `@anthropic-ai/sdk` in `functions/`.
+- **Structured outputs (`output_config.format` + a JSON schema), not ad-hoc
+  tool calling.** Same "have the model fill in fields" idea, but the schema
+  is enforced server-side so the response is guaranteed parseable — no
+  hand-written JSON repair on a path that feeds a money form.
+- Accepts PDF (base64 `document` block), images (`image` block), and plain
+  text. One-shot extraction, so base64 rather than the Files API.
+- `ANTHROPIC_API_KEY` functions secret. **Owner's account to create** — same
+  rule as Brevo/AdSense. A missing key must degrade gracefully: the callable
+  returns a plain error and the create form stays fully usable by hand. It
+  must never block trip creation.
+- Costs money per call and is unauthenticated like `createTrip` — it is a
+  spam target. P2.3 App Check covers it; until then cap it hard.
+
+> **Acceptance:** a real listing document produces a create form the owner
+> only has to correct, not retype; submitting still goes through the normal
+> `createTrip` path; with no API key set, trip creation works exactly as it
+> does today.
+
 ### P1 — Email: verification + the one non-optional notification
 
 **Decided 2026-07-28: Option A** of `docs/drafts/P1.1-magic-link-auth.md` —
 trip codes keep gating access; auth binds identity at the moment of
 submission. That draft is now the implementation reference.
 
-**1.1 Magic-link auth — CODE COMPLETE, BLOCKED ON ONE CONSOLE ACTION.**
-Firebase Auth has never been initialized on this project (the Identity
-Toolkit admin API returns `CONFIGURATION_NOT_FOUND`). **Deploying the
-current `functions/index.js` before Auth is enabled rejects every
-submission on the live site.** Owner action, in the Firebase console:
-Authentication → Get started → Email/Password → enable, *and* toggle
-"Email link (passwordless sign-in)" → Save; then Settings → Authorized
-domains → add `www.roomselector5000.com` and `roomselector5000.com`.
-Left to the owner deliberately: it is a console-only action with a billing
-surface, on a project belonging to a business.
+**1.1 Magic-link auth — CODE COMPLETE. Auth ENABLED 2026-08-03 (owner, Cloud Shell).**
+The earlier note here said Auth "has never been initialized (the Identity
+Toolkit admin API returns `CONFIGURATION_NOT_FOUND`)". **That was wrong** — a
+config resource existed all along (`subtype: FIREBASE_AUTH`, i.e. legacy
+Firebase Auth, *not* Identity Platform, so no billing surface). The earlier
+probe had hit a disabled API on the wrong quota project and the confusing
+403 was recorded as "not initialized". The *conclusion* was right, though:
+the Email/Password provider genuinely was off (`signIn` carried only
+`hashConfig`, no `signIn.email` block at all).
+
+Done via Cloud Shell rather than the console (the console pathway was not
+findable). Reproducible — every call needs `-H "X-Goog-User-Project:
+room-selector"` or it bills the wrong project and lies about the state:
+
+```bash
+gcloud services enable identitytoolkit.googleapis.com --project=room-selector
+# GET  /v2/projects/room-selector/config                    → read state
+# PATCH ?updateMask=signIn.email.enabled,signIn.email.passwordRequired
+#       {"signIn":{"email":{"enabled":true,"passwordRequired":false}}}
+# PATCH ?updateMask=authorizedDomains   (FULL replacement — include defaults)
+#       ["localhost","room-selector.firebaseapp.com","room-selector.web.app",
+#        "www.roomselector5000.com","roomselector5000.com"]
+```
+
+Do **not** call `identityPlatform:initializeAuth` — the config already
+exists, and that method risks upgrading the project to the GCIP SKU.
+
+Two gotchas worth keeping: `passwordRequired: false` (the passwordless
+toggle) is **absent from the response when set**, because protobuf JSON
+omits false-valued booleans — verify empirically with a
+`v1/accounts:sendOobCode` call (`requestType: EMAIL_SIGNIN`), not by reading
+the config back. And the domains PATCH is not cosmetic:
+[src/auth.js:91](src/auth.js#L91) passes `url: ${window.location.origin}/` as
+the continue URL, so `sendSignInLinkToEmail` throws
+`auth/unauthorized-continue-uri` on the live site without it.
 
 Then: `npm run build && firebase deploy --only firestore,functions,hosting`,
 and run the production e2e (which needs the auth strategy below).
+**Deploy is gated on 1.4 below, not on Auth.**
 
 Firebase Auth email-link sign-in. **Sender decided
 2026-07-28: launch with the default** `noreply@room-selector.firebaseapp.com`
-(Google-reputation deliverability, zero DNS). The *links inside* the email
-use `www.roomselector5000.com` — the hosting domain already serves the
-`/__/auth/action` handler; set `actionCodeSettings.url` to it and add the
-domain to Auth's authorized domains. `submitPreferences` requires
+(Google-reputation deliverability, zero DNS).
+
+**Correction 2026-08-03:** this section claimed the *links inside* the email
+use `www.roomselector5000.com`. They do not. The link host comes from
+`authDomain` in [src/firebase.js:10](src/firebase.js#L10), still
+`room-selector.firebaseapp.com`, and the live Auth config confirms it
+(`callbackUri: https://room-selector.firebaseapp.com/__/auth/action`).
+`actionCodeSettings.url` is the *continue* URL, not the handler host — a
+different field. It works, but recipients see a `firebaseapp.com` link on an
+email asking them to verify identity.
+
+Verified the switch is viable: **both hostnames really serve the handler** —
+`curl https://www.roomselector5000.com/__/auth/action` returns the actual
+`fireauth.oob.OobHandler` page, not the SPA fallback. Check the *body*, not
+the status code: the `"source": "**"` rewrite returns 200 with `index.html`
+for every path, so a 200 alone proves nothing. Firebase reserves `/__/*`
+above the rewrite. Flip `authDomain` as its **own** commit after the main
+deploy is verified, so a broken sign-in has one suspect.
+`submitPreferences` requires
 `request.auth` and takes the email from the verified token. Enforce for new
 submissions only; do not invalidate existing trips.
 
@@ -181,6 +258,33 @@ authoritative NS; site A/CNAME records untouched. **Results emails send
 from `noreply@roomselector5000.com`.** Still parked, owner-triggered:
 flipping *auth* emails to Brevo via Firebase Auth's custom-SMTP setting —
 until then auth emails stay on the Firebase default sender (see 1.1).
+
+**1.4 Deliverability — the verification email landed in SPAM (owner's Gmail,
+2026-08-03). Unblocked-but-known-risk; do not treat as cosmetic.**
+Measured with a real `v1/accounts:sendOobCode` call after enabling Auth,
+sender `noreply@room-selector.firebaseapp.com` (the 1.3 default). A
+verification email in spam is not a degraded experience — it is a **missing
+ballot**. The person never submits, the organizer never learns why, and the
+allocation runs over a smaller electorate. It fails silently on the
+recipient's side, which is the same shape as every other production bug in
+this repo.
+
+Scope it honestly: **n=1, one Gmail account.** Not proof of a systemic
+problem. But `firebaseapp.com` is a generic Google subdomain heavily used by
+phishers and it does not match the site the person is standing on — a
+plausible mechanism, not just bad luck.
+
+**This is a deliverability problem, not an architecture problem.** Any
+verify-by-email design has it, including Option C of the P1.1 draft. Do not
+redesign auth in response to it. The fix is the parked half of 1.3: flip
+*auth* emails to the Brevo sender (`roomselector5000.com` is already
+DKIM/DMARC-authenticated). Caveat: a freshly-authenticated domain has no
+sending reputation, which is itself a mild spam signal — likely better, not
+certainly better. Re-measure with the same `sendOobCode` curl after flipping.
+
+Owner call 2026-08-03: **do not block the P1 deploy on this.** Ship
+enforcement, then fix deliverability. Recorded here so it does not get
+rediscovered as a mystery ("nobody submitted").
 
 **1.2 Results email at finalization.** Without it the organizer hand-delivers
 results to 18 people. Send from `allocateRooms` after the batch commits, via
@@ -288,11 +392,9 @@ callables plus dashboard UI:
 
 ## Later (parked — constraints still bind)
 
-- **Listing import.** Organizer pastes listing *text*; an LLM pre-fills the
-  create form; the organizer always reviews before submit. Deliberately
-  paste-not-scrape: URL scraping violates Airbnb ToS, fights bot detection,
-  and gets Cloud Function IPs blocked. An ad vignette may precede the AI
-  call to offset its (small) cost.
+- ~~**Listing import.**~~ **Promoted 2026-08-03 — now P0.** The
+  ad-vignette-before-the-AI-call idea stays parked with P2.2 (needs the
+  owner's AdSense account).
 - **Drag-rank + AI assist.** The assist helps someone *express what they
   actually want*. It must never help them *win*: the mechanism is not
   strategyproof, and coaching bid-shading would break the exact property
@@ -333,7 +435,10 @@ being asked. A session isn't finished until its hand-off is.
 
 ## Start here (autonomous session)
 
-Work in this order: **P1.1 + 1.2 → P2.1 → P2.3 → P3 → P4.**
+Work in this order: **P0 → P1.1 + 1.2 (deploy) → P1.4 → P2.1 → P2.3 → P3 → P4.**
+(P0 jumped the queue on 2026-08-03: the owner has a trip coming up. P1 is
+already code-complete and its Auth blocker is cleared, so it is a deploy
+plus verification, not a build.)
 (P2.2 AdSense needs the owner's AdSense account — build the vignette config
 and footer links, but actual ad serving waits for the owner.)
 
