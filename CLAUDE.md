@@ -86,14 +86,14 @@ limits. Do not restate that content here.
 | Thing | Status |
 | --- | --- |
 | The app | **Deployed** — https://room-selector.web.app and https://www.roomselector5000.com (both certs valid; apex 301s to `www`) |
-| `firestore.rules` (deny-by-default), six callables, hosting from `dist/` | **Deployed**, verified end to end in production |
+| `firestore.rules` (deny-by-default), **seven** callables, hosting from `dist/` | **Deployed**, verified end to end in production |
 | `allocateRooms` | **Envy-free allocator**, proven in production on a discriminating input (2026-07-28) |
 | Couples | Mutual `partnerEmail` confirmation. The `+copy` hack no longer forms couples. |
 | Design system | Selecta-bot (cream/teal/coral, bot states), all six views verified at 390px, dark mode, zero console errors |
 | Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
 | Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
-| Email | **Built, not deployed.** P1.1 + P1.2 are committed and verified locally. The Auth blocker is cleared; what remains is the deploy itself. **Known risk: the verification email landed in spam (n=1) — see P1.4.** Production today still accepts any address and hand-delivers results. |
-| Listing import | **In progress** — owner-requested 2026-08-03, promoted from parked. See P0. |
+| Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
+| Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
 | Trip dates | **Not collected.** Blocks retention (P3). |
 | App Check / privacy policy / ads | None yet — P2. |
 
@@ -294,7 +294,25 @@ DKIM/DMARC-authenticated). Caveat: a freshly-authenticated domain has no
 sending reputation, which is itself a mild spam signal — likely better, not
 certainly better. Re-measure with the same `sendOobCode` curl after flipping.
 
-**Owner call 2026-08-03 (revised): fix deliverability FIRST, then deploy.**
+**RESOLVED 2026-08-03.** Auth email now goes through Brevo from
+`noreply@roomselector5000.com` and lands in the Gmail **inbox**. Kept below
+because the sequence is the reusable part, and because the cause was never
+architecture.
+
+The config path (`notification.sendEmail.method` → `CUSTOM_SMTP`) has two
+traps. `senderEmail` lives **inside** the `smtp` object, not beside it — a
+sibling `senderEmail` is rejected with "Cannot find field". And the updateMask
+must be `notification.sendEmail.method,notification.sendEmail.smtp`, **not**
+`notification.sendEmail`: the broad mask replaces the whole submessage and
+would wipe the four `*Template` blocks and `callbackUri`. Same full-replacement
+trap as `authorizedDomains`.
+
+Do **not** enable Brevo's "block unauthorized IPs for SMTP keys". Firebase Auth
+sends from Google infrastructure with no fixed, published IP range; enabling it
+stops auth email entirely.
+
+Original call, kept for the record:
+**fix deliverability FIRST, then deploy.**
 The owner's own trip is the first real use of this, so no participant should
 meet a spam-foldered verification link. Sequence:
 
