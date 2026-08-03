@@ -11,6 +11,9 @@ const {computeAllocation} = require("./allocation");
 const {sendResultsEmails} = require("./email");
 const listingImport = require("./listing-import");
 const cascade = require("./trip-cascade");
+const {
+  MAX_DISPLAY_NAME, normalizeName, maskEmail, resolveCouples,
+} = require("./couples");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -227,7 +230,8 @@ exports.joinTrip = onCall(opts, async (request) => {
 });
 
 exports.submitPreferences = onCall(opts, async (request) => {
-  const {tripId, preferences, roomPrices, partnerEmail} = request.data || {};
+  const {tripId, preferences, roomPrices, displayName,
+    partnerSubmissionId, partnerClaimName} = request.data || {};
 
   // Identity comes from the verified token, never from the request body
   // (P1.1 Option A). This is structural rather than a check: there is no
@@ -247,18 +251,24 @@ exports.submitPreferences = onCall(opts, async (request) => {
     throw new HttpsError("invalid-argument", "Valid email required");
   }
 
-  // Optional bed-sharing declaration (P1.2). A couple only forms when the
-  // named partner's submission names this email back — enforced at
-  // allocation time, stored verbatim here.
-  const cleanPartner = String(partnerEmail || "").toLowerCase().trim();
-  if (cleanPartner) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanPartner)) {
-      throw new HttpsError("invalid-argument", "Valid partner email required");
-    }
-    if (cleanPartner === cleanEmail) {
-      throw new HttpsError("invalid-argument",
-          "Partner email must be a different person");
-    }
+  // Everyone needs a name others can pick them by (P5.2). Nobody types an
+  // email in the pairing flow any more, so this is what a partner selects.
+  const cleanName = String(displayName || "").trim().slice(0, MAX_DISPLAY_NAME);
+  if (!cleanName) {
+    throw new HttpsError("invalid-argument", "Your name is required");
+  }
+
+  // Optional bed-sharing declaration. Two shapes: an opaque id from the
+  // dropdown (someone who has already submitted), or a typed name for someone
+  // who has not yet. Neither is an email -- being named as jordan@gmail.com by
+  // someone who then verifies as jduffey@gmail.com produced two singles and
+  // told nobody, which is the failure this replaces. `partnerEmail` is never
+  // accepted from a client now; resolveCouples derives it below.
+  const cleanPartnerId = String(partnerSubmissionId || "").trim();
+  const cleanClaim = String(partnerClaimName || "").trim().slice(0, MAX_DISPLAY_NAME);
+  if (cleanPartnerId && cleanClaim) {
+    throw new HttpsError("invalid-argument",
+        "Choose a partner from the list or type a name, not both");
   }
   if (!Array.isArray(preferences) || preferences.length === 0) {
     throw new HttpsError("invalid-argument", "Rank at least one room");
@@ -311,10 +321,29 @@ exports.submitPreferences = onCall(opts, async (request) => {
     throw new HttpsError("already-exists", "This email already submitted");
   }
 
+  // A dropdown id must name a real submission on THIS trip, and not this one.
+  // Checked before the write so a bad id is a clear error rather than a
+  // pairing that silently never resolves.
+  if (cleanPartnerId) {
+    const target = await db.collection("submissions").doc(cleanPartnerId).get();
+    if (!target.exists || target.data().tripId !== tripSnap.id) {
+      throw new HttpsError("invalid-argument", "Unknown partner selection");
+    }
+    if ((target.data().email || "").toLowerCase() === cleanEmail) {
+      throw new HttpsError("invalid-argument",
+          "You cannot be your own partner");
+    }
+  }
+
   await db.collection("submissions").add({
     tripId: tripSnap.id,
     email: cleanEmail,
-    partnerEmail: cleanPartner || null,
+    displayName: cleanName,
+    // Intent, as given. `partnerEmail` is derived from it by resolveCouples
+    // and stays the single field allocation reads.
+    partnerSubmissionId: cleanPartnerId || null,
+    partnerClaimName: cleanClaim || null,
+    partnerEmail: null,
     preferences,
     roomPrices: roomPrices.map((rp) => ({
       id: rp.id,
@@ -326,7 +355,65 @@ exports.submitPreferences = onCall(opts, async (request) => {
     timestamp: new Date().toISOString(),
   });
 
+  // Runs for every submission, not just ones declaring a partner: this
+  // submission may be the person somebody else was waiting to be able to
+  // name, and that pairing completes here.
+  await resolveCouples(db, tripSnap.id);
+
   return {success: true};
+});
+
+/**
+ * Who has already submitted, by name, so a partner can be picked rather than
+ * spelled.
+ *
+ * THE ONE CALLABLE that returns anything derived from `submissions` to a
+ * non-admin, and it is bounded on purpose: display names and opaque document
+ * ids, never an address. If a change would put a full email in this response,
+ * the change is wrong -- see the security invariant in CLAUDE.md.
+ *
+ * The single exception is `hint`, a masked address (j****y@gmail.com) attached
+ * only when two participants share a display name. Two people called "Jordan"
+ * are otherwise indistinguishable in a dropdown, and picking the wrong one
+ * puts two people in one bed. A masked fragment shown to someone's own
+ * trip-mates is the smaller harm.
+ *
+ * No trip code required, matching the surface that already exists: `trips` and
+ * `rooms` are world-readable by trip id, and the submission form is reached by
+ * a bare /trip/:id link with no code in hand. App Check is what makes this
+ * expensive to scrape.
+ */
+exports.listParticipantNames = onCall(opts, async (request) => {
+  const tripId = String((request.data || {}).tripId || "");
+  if (!tripId) throw new HttpsError("invalid-argument", "Trip id required");
+
+  const snap = await db.collection("submissions")
+      .where("tripId", "==", tripId).get();
+
+  const people = snap.docs.map((d) => {
+    const data = d.data();
+    // Submissions predating P5.2 carry no displayName. Fall back to a masked
+    // local part so they remain selectable instead of appearing as a blank
+    // row that nobody can identify.
+    const name = String(data.displayName || "").trim() ||
+      maskEmail(data.email || "").split("@")[0];
+    return {submissionId: d.id, displayName: name, email: data.email || ""};
+  });
+
+  const seen = new Map();
+  for (const p of people) {
+    const key = normalizeName(p.displayName);
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+
+  return {
+    participants: people.map((p) => ({
+      submissionId: p.submissionId,
+      displayName: p.displayName,
+      hint: seen.get(normalizeName(p.displayName)) > 1 ?
+        maskEmail(p.email) : null,
+    })),
+  };
 });
 
 exports.getAdminData = onCall(opts, async (request) => {
@@ -650,6 +737,13 @@ exports.removeSubmission = onCall(opts, async (request) => {
   snap.docs.forEach((d) => batch.delete(d.ref));
   orphaned.docs.forEach((d) => batch.update(d.ref, {partnerEmail: null}));
   await batch.commit();
+
+  // The explicit clear above still runs because it also covers submissions
+  // written before P5.2, which carry a partnerEmail and no intent fields for
+  // resolveCouples to reason from. This second pass then dissolves any pairing
+  // whose partner has just gone -- including one held by submissionId rather
+  // than by address, which the equality query above cannot see.
+  await resolveCouples(db, tripId);
 
   return {
     success: true,
