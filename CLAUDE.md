@@ -113,6 +113,17 @@ Production failure modes already hit, worth remembering:
   for every asset: blank page, no console error.
 - Every production bug so far returned HTTP 200 and logged nothing. Verify in a
   real browser, dark mode, asserting zero console errors.
+- **`verify/e2e-napa-flow.mjs` binds to the submission form by position and by
+  exact button text**, so a copy change breaks the harness rather than the app.
+  It fills the partner field as `input[type="email"]).nth(1)`
+  ([line 175](verify/e2e-napa-flow.mjs#L175)) and clicks `text-is("Add to
+  Preferences")`, `text-is("+ Show Price Adjustment")`, `text-is("− Hide Price
+  Adjustment")`, `text-is("Submit Preferences")` — and waits on the literal
+  string `Perfect! Your adjustments sum to zero.` All of P5 touches these. A
+  first-run dialog breaks it harder: the harness opens a **fresh browser
+  context per participant**, so `localStorage` is always empty and the dialog
+  is always up. Update the harness in the same commit as the UI, and prefer
+  `data-testid` over copy for anything P5 adds.
 
 ### Shipped (2026-08-03, second session) — do not redo
 
@@ -181,6 +192,14 @@ custom-domain certs live. Proofs live in `verify/`; theory in
   containing `adminCode`, `participantCode`, or an email address. Firestore cannot
   filter fields on a read, which is why trip codes live in `trips/{id}/secret/codes`.
   Add an explicit deny block rather than loosening an existing rule.
+  - P5.2 adds one bounded exception, and it is bounded on purpose:
+    `submissions` stays unreadable by rules, and **`listParticipantNames` is
+    the only callable that returns anything derived from it to a non-admin.**
+    It returns display names and opaque submission ids — never an address. The
+    single exception is the collision-disambiguation mask
+    (`j••••y@gmail.com`), shown only when two display names on one trip
+    collide. If a change would put a full address in that response, the change
+    is wrong.
 - **Lint gates deploy.** `firebase.json` runs `npm --prefix functions run lint` as a
   `predeploy` hook.
 - **Commits** explain *why*, not just what. Include measured results when a change is
@@ -569,6 +588,151 @@ callables plus dashboard UI:
 > Shipped below). The figures above are from a run reproduced after that
 > fix.
 
+### P5 — The first-timer's pass (owner-requested 2026-08-03, third session)
+
+Everything through P4 makes the mechanism *correct*. P5 is about whether a
+person who has never seen this product can drive it. Three places in the
+create → join → submit journey leave someone guessing, and guessing is
+expensive here in a specific way: a person who misunderstands the form submits
+a ballot that does not say what they meant, and **the allocator then fairly
+allocates fiction**. Envy-freeness over a misunderstood ballot is worth
+nothing, and — like every other bug in this repo — it fails silently.
+
+None of these is a crash. All three return HTTP 200.
+
+**5.1 Listing import: say what to paste.**
+
+The panel copy today is "Upload the listing or paste its text"
+([src/components/TripCreator.jsx:291](src/components/TripCreator.jsx#L291)).
+It never says *which* text, never states the size or format limits until
+after a failure, and never says that a URL does nothing.
+
+- Explicit, numbered instruction: open the listing, select the whole page
+  **including the sleeping-arrangement / bedroom section and the price
+  breakdown**, paste it. The bedroom section is the part the extraction
+  actually needs and the part a person is least likely to include.
+- State accepted formats and the 3 MB cap **up front**, not only in the error
+  path. `MAX_UPLOAD_BYTES` and `ACCEPTED_UPLOADS` already exist at
+  [TripCreator.jsx:8-9](src/components/TripCreator.jsx#L8-L9) — render from
+  them, do not restate the numbers in copy that can drift.
+- **Refuse a bare URL client-side**, plainly: Selecta-bot cannot open links —
+  paste the page's text or upload a screenshot. This is the likeliest first
+  attempt (the product is deliberately paste-not-scrape, see P0) and today it
+  spends an API call to return nothing useful. Catching it in the browser is
+  free and the message is the only place a user learns the constraint.
+- Voice: this is instruction copy about a thing that costs money, so it is
+  literal. Retro flourish stays in the panel heading.
+
+> **Acceptance:** a first-time organizer who pastes an Airbnb URL is told why
+> that cannot work and what to do instead, without an API call; the formats
+> and size cap are readable before choosing a file; a pasted listing that
+> includes the bedroom section fills the bed list.
+
+**5.2 Partner selection by name, never by email.**
+
+Today [SubmissionForm.jsx:370](src/components/SubmissionForm.jsx#L370) takes
+`partnerEmail` as free text, and a couple forms only on *exact mutual* match
+([functions/allocation.js:123-129](functions/allocation.js#L123-L129)). Two
+ways that fails, both silent, both ending as two singles with nobody informed:
+a typo, or — the one the owner hit — being named as `jordan@gmail.com` by
+someone who then verifies under `jduffey@gmail.com`. Edit-distance repair
+cannot bridge that second case; the addresses are not near each other.
+
+**Decided 2026-08-03: a human never types an email address in the pairing
+flow at all.** Your own address comes from the verified magic-link token and
+is correct by construction. Your partner's comes from a server-side
+dereference of an opaque id — never from your memory of how they spell it.
+This deletes the entire failure class rather than repairing instances of it.
+
+- `submissions` gains **`displayName`** (required, ≤40 chars, e.g. "Jordan
+  D."), collected beside the email field.
+- New callable **`listParticipantNames(tripId)`** → `[{submissionId,
+  displayName}]` and **no email addresses, ever**. App Check enforced like
+  the other six; it is reachable from the trip page, which is not `getResults`
+  and has no mail-client excuse.
+- The partner control becomes a **name dropdown**, plus an escape hatch for
+  "they haven't submitted yet".
+- **`submitPreferences` resolves `partnerSubmissionId` → `partnerEmail`
+  server-side and stores `partnerEmail` exactly as it does today.** This is
+  the load-bearing decision. `computeAllocation`
+  ([allocation.js:114-129](functions/allocation.js#L114-L129)),
+  `removeSubmission`'s `where("partnerEmail","==",target)`
+  ([functions/index.js:634](functions/index.js#L634)), and
+  [verify/envy-audit.cjs:53-55](verify/envy-audit.cjs#L53-L55) all key on that
+  field. Changing the wire format while leaving the stored field untouched
+  means **zero changes to the allocator or the auditor** — and the auditor is
+  precisely the code that once manufactured a phantom envy violation by
+  modelling couples differently from the product.
+- **The ordering problem is the whole difficulty, so state it:** the dropdown
+  can only list people who have *already* submitted.
+  - Partner already submitted → pick them. Exact, instant, unspoofable.
+  - Partner has not → type their **name** as a pending claim. A name, not an
+    address: a wrong name is recoverable by a human reading it, a wrong
+    address is not.
+  - Mutual confirmation survives, because the *later* side is always the
+    exact one. One fuzzy claim plus one dropdown pick is a confirmed pair;
+    a fuzzy claim alone is not, exactly as today.
+  - Anything still unresolved surfaces in the admin dashboard as a **Couples
+    panel** (confirmed pairs / unresolved claims), and `allocateRooms` warns
+    before finalizing. The organizer already reads every address via
+    `getAdminData`, so they are the only party who can reconcile a mismatch —
+    and today they are never told there is one.
+- **Name collisions — decided 2026-08-03:** when two display names on a trip
+  collide, and only then, disambiguate with a masked address
+  (`j••••y@gmail.com`). A deliberate, bounded leak to a person's own
+  trip-mates, preferable to a pairing they cannot tell apart. It is a
+  decision, not a detail: it is the one place an address fragment reaches a
+  non-admin client.
+- **Legacy submissions have no `displayName`** — fall back to a masked
+  local-part. Cheap now (`submissions` holds only `[demo]` fixtures after the
+  owner's cleanup) and it must be written down, because discovering it later
+  looks like a broken dashboard.
+
+> **Acceptance:** two people who have never exchanged email addresses form a
+> confirmed couple; a participant named before they submit can still resolve
+> the pairing from their side; an unresolved claim is visible to the organizer
+> *before* allocation rather than discoverable only in the results; no
+> response to a non-admin client contains a full email address.
+
+**5.3 Explain the mechanism where it is used.**
+
+The balance bar ([SubmissionForm.jsx:325](src/components/SubmissionForm.jsx#L325))
+says "Needs adjustment: +$50" and never says why adjustments must sum to zero.
+"+ Show Price Adjustment" is a collapsed disclosure with no explanation behind
+it. Envy-freeness is the product, and the page that depends on people
+understanding it explains it nowhere.
+
+- New `src/components/Tooltip.jsx` — nothing like it exists today. **Focus-
+  and tap-driven, not hover-only**; 390px is a first-class target and a
+  hover tooltip is invisible on the device most people will use.
+- New **`src/components/SelectaBotScene.jsx`**, kept *separate* from
+  [SelectaBot.jsx](src/components/SelectaBot.jsx). Reason: the existing
+  component is a verified head-and-shoulders bust with a four-value `state`
+  prop; giving it arms means a new `viewBox` and re-verifying every screen
+  that renders it. Three scenes — balance scale (zero-sum), ranked list
+  (preferences), paired beds (partners).
+- A dismissible **"How this works"** dialog on first visit to the submission
+  form, remembered in `localStorage` (same mechanism as
+  [src/auth.js:37](src/auth.js#L37)), and **reopenable from a persistent
+  button** — an explanation that can be dismissed forever is an explanation
+  the second-guessing user cannot get back.
+- Inline tooltips on the three controls that carry the mechanism: the balance
+  bar, the ranking buttons, the ±$25 stepper.
+- Voice: the dialog explains *why adjustments sum to zero* and *why ranking
+  honestly is the right move*, restated from `ARCHITECTURE.md` rather than
+  re-derived. **It must not coach anyone toward a winning bid** — the
+  mechanism is not strategyproof, and the parked "Drag-rank + AI assist" note
+  binds here too. Helping someone express what they want is the goal; helping
+  them win breaks the property being sold.
+- The dialog and tooltips live inside `data-ad-free="submission"`
+  ([SubmissionForm.jsx:313](src/components/SubmissionForm.jsx#L313)). P2.2
+  forbids ad markup in money or fairness UI and new UI does not get an
+  exemption.
+
+> **Acceptance:** a first-time participant can state, unprompted, why the
+> adjustments must sum to zero; the explanation is reachable again after
+> dismissal; tooltips open by tap at 390px; zero console errors, dark mode.
+
 ---
 
 ## Later (parked — constraints still bind)
@@ -616,8 +780,18 @@ being asked. A session isn't finished until its hand-off is.
 
 ## Start here (autonomous session)
 
-**As of 2026-08-03 (second session) the roadmap above is shipped.** P4 is
-complete and P2.2's code half is done and verified. What is left is not code:
+**P0–P4 are shipped as of 2026-08-03.** P4 is complete and P2.2's code half is
+done and verified.
+
+**The code work now is P5 — the first-timer's pass**, specced in the roadmap
+above during the third session on 2026-08-03 and **not started**. It is UI and
+one new callable, not mechanism: the allocator, the auditor, and the stored
+`partnerEmail` shape are all deliberately untouched by it. Read P5.2 before
+touching the partner flow — the dropdown-ordering problem is the part that
+looks simple and is not. Read the harness note under "Production failure
+modes" before touching any copy on the submission form.
+
+Everything else outstanding is owner-blocked, not repo-blocked:
 
 1. **P2.2 is blocked on the owner, not on the repo.** Finish AdSense site
    verification (still "Your site needs review" — both the meta tag and
