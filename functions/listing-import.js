@@ -15,6 +15,46 @@
 
 const Anthropic = require("@anthropic-ai/sdk");
 
+// Measured 2026-08-03 with verify/preview-listing-import.cjs --sweep, on the
+// messy sample listing in that harness. All five candidates found the same 6
+// beds and all flagged the listing's "sleeps 12" vs 10 described:
+//
+//   opus-5 / high     $0.0261    opus-5 / low      $0.0200
+//   sonnet-5 / high   $0.0082    sonnet-5 / low    $0.0081
+//   haiku-4-5         $0.0026
+//
+// Haiku is 10x cheaper than Opus and read *better* on this sample -- it kept
+// "not suitable for those uncomfortable with ladders" where Sonnet trimmed to
+// "accessed via steep ladder", and the ladder caveat is exactly the kind of
+// thing that changes how someone ranks a bed.
+//
+// A weak extraction is cheap here by design: the organizer reviews every field
+// before anything is created, and the notes panel surfaces what the model was
+// unsure about. That is what makes the cheapest model the right default rather
+// than a gamble.
+//
+// CAVEAT: measured on one clean text sample. Not yet tested on a real
+// multi-page PDF or a screenshot, where a smaller model has more room to
+// degrade. Re-run the sweep against a real listing before trusting it there;
+// if it slips, this is a one-constant change to claude-sonnet-5.
+const MODEL = "claude-haiku-4-5";
+const EFFORT = "low";
+
+// Measured 2026-08-03: Sonnet 5 returns 400 for the `fallbacks` parameter.
+const SUPPORTS_FALLBACKS = ["claude-opus-5", "claude-fable-5"];
+
+// Pre-4.6 generation: no adaptive thinking, no effort parameter.
+const LEGACY_MODELS = ["claude-haiku-4-5"];
+
+// Published $/1M tokens, for the harness's cost report only. Nothing reads
+// these at runtime.
+const PRICING = {
+  "claude-opus-5": {input: 5, output: 25},
+  // Introductory pricing through 2026-08-31; reverts to $3/$15.
+  "claude-sonnet-5": {input: 2, output: 10},
+  "claude-haiku-4-5": {input: 1, output: 5},
+};
+
 // Mirrors the <option> values in TripCreator.jsx. The model must choose from
 // this set or the pre-filled <select> silently falls back to the first option
 // and the organizer sees a bed type nobody suggested.
@@ -207,24 +247,37 @@ function buildContent({text, fileData, mediaType}) {
  * @returns {Promise<Object>} `{name, totalTripCost, rooms, notes}`.
  * @throws {Error} With a message safe to show the organizer.
  */
-async function extractListing(input) {
+async function extractListing(input, options = {}) {
   const client = new Anthropic({apiKey: process.env.ANTHROPIC_API_KEY});
+  const {model = MODEL, effort = EFFORT, onUsage} = options;
 
   const response = await client.beta.messages.create({
-    model: "claude-opus-5",
+    model,
     max_tokens: 16000,
-    // Adaptive is the default on Opus 5; stated explicitly so it survives a
-    // future model swap. max_tokens covers thinking plus output.
-    thinking: {type: "adaptive"},
-    // Anthropic's recommended fallback if a safety classifier declines. A
-    // rental listing should never trip one, but a refused extraction would
-    // otherwise surface as a blank form with no explanation.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Thinking tokens bill as output, and on a schema-constrained extraction
+    // they are the dominant cost. Effort is the lever -- see MODEL above.
+    // Haiku 4.5 predates adaptive thinking and the effort parameter and 400s
+    // on both, so it gets neither. Kept as a branch rather than deleted: it is
+    // the cheapest option and the reason we are not using it is measured
+    // quality, not incompatibility.
+    ...(LEGACY_MODELS.includes(model) ? {} : {thinking: {type: "adaptive"}}),
+    // Server-side refusal fallback is Opus-5-only -- Sonnet 5 rejects the
+    // parameter with a 400 (measured 2026-08-03). Spread it in conditionally
+    // rather than pinning the model to it: a rental listing should never trip
+    // a safety classifier, so this is insurance, not a requirement.
+    ...(SUPPORTS_FALLBACKS.includes(model) ? {
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+    } : {}),
     system: SYSTEM_PROMPT,
-    output_config: {format: {type: "json_schema", schema: LISTING_SCHEMA}},
+    output_config: {
+      ...(LEGACY_MODELS.includes(model) ? {} : {effort}),
+      format: {type: "json_schema", schema: LISTING_SCHEMA},
+    },
     messages: [{role: "user", content: buildContent(input)}],
   });
+
+  if (onUsage) onUsage({model, effort, usage: response.usage});
 
   // stop_reason is checked before content is read: on a refusal `content` is
   // empty or partial, and indexing it blindly throws something unhelpful.
@@ -251,6 +304,9 @@ module.exports = {
   extractListing,
   isConfigured,
   normalizeDraft,
+  MODEL,
+  EFFORT,
+  PRICING,
   BED_TYPES,
   MAX_FILE_BYTES,
   MAX_TEXT_CHARS,

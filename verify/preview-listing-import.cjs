@@ -20,7 +20,36 @@
 
 const fs = require("fs");
 const path = require("path");
-const {extractListing, isConfigured} = require("../functions/listing-import");
+const {
+  extractListing, isConfigured, MODEL, EFFORT, PRICING,
+} = require("../functions/listing-import");
+
+// The combinations worth comparing. Effort matters more than model here:
+// thinking bills as output, and on a schema-constrained extraction the
+// thinking usually outweighs the JSON. Haiku 4.5 predates adaptive thinking
+// and the effort parameter, so it is not in the sweep.
+const SWEEP = [
+  {model: "claude-opus-5", effort: "high"},
+  {model: "claude-opus-5", effort: "low"},
+  {model: "claude-sonnet-5", effort: "high"},
+  {model: "claude-sonnet-5", effort: "low"},
+  {model: "claude-haiku-4-5", effort: "n/a"},
+];
+
+/**
+ * Dollar cost of one call from its reported usage.
+ *
+ * @param {string} model Model id.
+ * @param {Object} usage The response's usage object.
+ * @returns {number} Cost in dollars.
+ */
+function costOf(model, usage) {
+  const p = PRICING[model];
+  if (!p || !usage) return NaN;
+  const cached = usage.cache_read_input_tokens || 0;
+  return ((usage.input_tokens + cached) * p.input +
+          usage.output_tokens * p.output) / 1e6;
+}
 
 // Deliberately messy: duplicate beds needing distinct names, a bed buried in
 // prose, an ambiguous "sleeps" claim that does not match the bed list, and a
@@ -64,7 +93,7 @@ const MEDIA = {
     process.exit(1);
   }
 
-  const file = process.argv[2];
+  const file = process.argv.slice(2).find((a) => !a.startsWith("--"));
   let input;
   if (file) {
     const mediaType = MEDIA[path.extname(file).toLowerCase()];
@@ -79,8 +108,41 @@ const MEDIA = {
     console.log("Reading the built-in sample listing…\n");
   }
 
+  // --sweep answers "what should this run on?" with measurements rather than
+  // an opinion: same listing, every candidate, cost and quality side by side.
+  if (process.argv.includes("--sweep")) {
+    console.log("model / effort            in    out    cost   secs  beds  " +
+                "caught the sleeps-12 gap?");
+    for (const combo of SWEEP) {
+      const t0 = Date.now();
+      let usage = null;
+      try {
+        const d = await extractListing(input,
+            {...combo, onUsage: (u) => (usage = u.usage)});
+        const secs = ((Date.now() - t0) / 1000).toFixed(1);
+        // The discrepancy catch is the quality signal that separates
+        // transcription from reading: the listing claims 12 sleepers and
+        // describes 10. A model that silently pads to 12 is worse than useless
+        // here, because the organizer would never know to check.
+        const caught = /\b(10|12)\b/.test(d.notes) && d.notes.length > 20;
+        console.log(
+            `${(combo.model + " / " + combo.effort).padEnd(24)} ` +
+            `${String(usage.input_tokens).padStart(5)} ` +
+            `${String(usage.output_tokens).padStart(6)} ` +
+            `$${costOf(combo.model, usage).toFixed(4)} ` +
+            `${secs.padStart(6)} ${String(d.rooms.length).padStart(5)}  ` +
+            `${caught ? "yes" : "NO"}`);
+      } catch (err) {
+        console.log(`${(combo.model + " / " + combo.effort).padEnd(24)} ` +
+                    `FAILED: ${err.message}`);
+      }
+    }
+    return;
+  }
+
   const started = Date.now();
-  const draft = await extractListing(input);
+  let usage = null;
+  const draft = await extractListing(input, {onUsage: (u) => (usage = u.usage)});
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
 
   console.log(`Trip name:  ${draft.name}`);
@@ -95,7 +157,12 @@ const MEDIA = {
   }
 
   console.log(`\nNotes to organizer: ${draft.notes || "(none)"}`);
-  console.log(`\nExtracted in ${elapsed}s.`);
+  console.log(`\nExtracted in ${elapsed}s on ${MODEL} at effort ${EFFORT}.`);
+  if (usage) {
+    console.log(`Tokens: ${usage.input_tokens} in / ${usage.output_tokens} ` +
+                `out (thinking bills as output) — ` +
+                `$${costOf(MODEL, usage).toFixed(4)} for this call.`);
+  }
 
   // The invariant the whole feature rests on: the model never sets a price.
   const priced = draft.rooms.filter((r) => r.basePrice !== 0);

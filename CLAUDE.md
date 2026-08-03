@@ -158,8 +158,20 @@ Still deliberately **paste/upload, not scrape.** URL scraping violates Airbnb
 ToS, fights bot detection, and gets Cloud Function IPs blocked. That
 constraint is unchanged by the promotion.
 
-- Callable `extractListing` (7th callable). Model `claude-opus-5` via
-  `@anthropic-ai/sdk` in `functions/`.
+- Callable `extractListing` (7th callable), `@anthropic-ai/sdk` in `functions/`.
+- **Model `claude-haiku-4-5`, decided 2026-08-03 by measurement**, not by
+  taste. `verify/preview-listing-import.cjs --sweep` runs the same listing
+  through every candidate and prints tokens, cost, and whether it caught the
+  sample's deliberate "sleeps 12 but only 10 described" trap. Measured:
+  opus-5/high $0.0261, opus-5/low $0.0200, sonnet-5/high $0.0082,
+  sonnet-5/low $0.0081, **haiku-4-5 $0.0026**. All five found the same 6 beds
+  and all flagged the discrepancy. Re-run the sweep before changing the model.
+- Two API constraints found by measurement: **Sonnet 5 returns 400 for the
+  `fallbacks` parameter** (Opus-5 only), and **Haiku 4.5 predates adaptive
+  thinking and `effort`** and 400s on both. Both are handled by spreading the
+  options in conditionally rather than pinning the model.
+- Cost is dominated by **output tokens, because thinking bills as output** --
+  so `effort` is a bigger lever than model choice within a generation.
 - **Structured outputs (`output_config.format` + a JSON schema), not ad-hoc
   tool calling.** Same "have the model fill in fields" idea, but the schema
   is enforced server-side so the response is guaranteed parseable — no
