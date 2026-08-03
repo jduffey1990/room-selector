@@ -7,6 +7,17 @@ import { PlusCircle, Trash2, Copy, Check, Upload, Loader2 } from 'lucide-react';
 // useful message -- the callable enforces both for real.
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 const ACCEPTED_UPLOADS = 'application/pdf,image/png,image/jpeg,image/gif,image/webp';
+// Rendered in the panel rather than written into the copy, so the stated
+// limits cannot drift away from the enforced ones.
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
+
+// A pasted listing URL is the likeliest first attempt -- it is what everyone
+// has on their clipboard -- and it is the one input this feature can never
+// serve: extraction is paste/upload, not scrape (see functions/listing-import
+// .js). Left unguarded it spends a real API call to return nothing useful and
+// reads as "the AI is broken". Matches a paste that is *only* a link, so a
+// listing whose text happens to contain a URL still goes through.
+const LOOKS_LIKE_URL = /^\s*(https?:\/\/|www\.)\S+\s*$/i;
 
 export default function TripCreator() {
   const navigate = useNavigate();
@@ -65,6 +76,16 @@ export default function TripCreator() {
   };
 
   const runImport = async (payload) => {
+    // Caught before the call, not after: the whole point is to not spend a
+    // paid request telling someone what they could have been told instantly.
+    if (typeof payload.text === 'string' && LOOKS_LIKE_URL.test(payload.text)) {
+      setImportError(
+        "Selecta-bot can't open links. Open the listing, select the whole " +
+        'page, and paste the text here — or upload a screenshot of it.'
+      );
+      return;
+    }
+
     setImporting(true);
     setImportError('');
     setImportNotes('');
@@ -135,6 +156,10 @@ export default function TripCreator() {
         endDate: endDate || null,
         name: tripName,
         totalTripCost: Number(totalCost) || 0,
+        // Carried onto the trip so the discrepancy the model flagged is still
+        // readable next week. It used to live only in component state and die
+        // the moment this form submitted.
+        importNotes: importNotes || null,
         rooms: rooms.map((room) => ({
           name: room.name,
           description: room.description,
@@ -288,10 +313,26 @@ export default function TripCreator() {
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-gray-700">
-                        Upload the listing or paste its text. Selecta-bot fills
-                        in the beds; you check them before anything is created.
-                      </p>
+                      {/* Instruction copy about a thing that costs money, so
+                          it is literal and numbered. The old version said
+                          "upload the listing or paste its text" and left the
+                          reader to guess which text, how much of it, and
+                          whether a link would do. */}
+                      <div className="text-sm text-gray-700">
+                        <p className="font-medium mb-1">
+                          Selecta-bot fills in the beds; you check them before
+                          anything is created.
+                        </p>
+                        <ol className="list-decimal ml-4 space-y-0.5 text-gray-600">
+                          <li>Open the listing page.</li>
+                          <li>
+                            Select and copy the whole page — <strong>including
+                            the bedroom / sleeping-arrangement section</strong>,
+                            which is the part that describes the beds.
+                          </li>
+                          <li>Paste it below, or upload a screenshot or PDF.</li>
+                        </ol>
+                      </div>
                       <button
                         onClick={() => setShowImport(false)}
                         className="text-sm text-gray-500 hover:text-gray-700 shrink-0"
@@ -315,11 +356,17 @@ export default function TripCreator() {
                         }}
                       />
                     </label>
+                    {/* Stated before the attempt, not after it fails. Both
+                        values come from the constants the callable enforces. */}
+                    <p className="text-xs text-gray-500 -mt-1 text-center">
+                      PDF, PNG, JPG, GIF or WebP · up to {MAX_UPLOAD_MB} MB ·
+                      pasting a link won&rsquo;t work
+                    </p>
 
                     <textarea
                       value={listingText}
                       onChange={(e) => setListingText(e.target.value)}
-                      placeholder="…or paste the listing text here"
+                      placeholder="…or paste the listing text here (the whole page, bedrooms included)"
                       rows={4}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                     />

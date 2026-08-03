@@ -152,7 +152,8 @@ exports.extractListing = onCall(extractOpts, async (request) => {
 const isDateString = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 exports.createTrip = onCall(opts, async (request) => {
-  const {name, totalTripCost, rooms, startDate, endDate} = request.data || {};
+  const {name, totalTripCost, rooms, startDate, endDate, importNotes} =
+    request.data || {};
 
   if (typeof name !== "string" || !name.trim()) {
     throw new HttpsError("invalid-argument", "Trip name required");
@@ -183,6 +184,12 @@ exports.createTrip = onCall(opts, async (request) => {
     // the longer createdAt window.
     startDate: isDateString(startDate) ? startDate : null,
     endDate: isDateString(endDate) ? endDate : null,
+    // What the listing import could not work out ("sleeps 12, found 10 beds").
+    // Kept because the organizer is the person who needs it a week later, and
+    // it used to survive exactly one screen. Safe on this world-readable doc:
+    // it describes the property, never a person -- no email, no code. The
+    // dashboard is the only thing that renders it.
+    importNotes: String(importNotes || "").slice(0, 600) || null,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -547,6 +554,12 @@ exports.updateTrip = onCall(opts, async (request) => {
   if (totalTripCost !== undefined) {
     updates.totalTripCost = Number(totalTripCost) || 0;
   }
+  // Editing the beds invalidates the import note: it described an extraction
+  // of the ORIGINAL listing, not the list that exists now. Left in place it
+  // becomes a warning about beds that no longer exist, which is worse than no
+  // warning -- the organizer trusts it and chases a discrepancy they fixed.
+  if (Array.isArray(rooms)) updates.importNotes = null;
+
   if (Object.keys(updates).length) await tripRef.update(updates);
 
   // Rooms are replaced wholesale rather than diffed. A partial update would

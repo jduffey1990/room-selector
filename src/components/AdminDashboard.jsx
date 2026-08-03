@@ -337,7 +337,21 @@ export default function AdminDashboard() {
             </button>
           </div>
           <p className="text-gray-600">Admin Dashboard</p>
-          
+
+          {/* What the listing import could not work out, kept from trip
+              creation. Organizer-only on purpose: a participant reading "the
+              model wasn't sure about bed 7" learns nothing and may distrust a
+              bed list that was already corrected here. updateTrip clears this
+              when the beds change, so it never describes a list that is gone. */}
+          {trip.importNotes && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-amber-900 mb-1">
+                From the listing import
+              </p>
+              <p className="text-sm text-amber-800">{trip.importNotes}</p>
+            </div>
+          )}
+
           {/* Trip Status */}
           <div className="mt-4 flex items-center gap-3">
             <span className={`px-4 py-2 rounded-full text-sm font-medium ${
