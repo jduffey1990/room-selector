@@ -1,0 +1,4 @@
+# Authorized digital sellers for roomselector5000.com.
+# Vite copies public/ to the dist root, so this is served at
+# https://www.roomselector5000.com/ads.txt -- AdSense reads it there.
+google.com, pub-6539967757276332, DIRECT, f08c47fec0942fa0
