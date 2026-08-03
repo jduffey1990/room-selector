@@ -19,6 +19,35 @@ export default function AdminDashboard() {
   const [allocating, setAllocating] = useState(false);
   const [allocationError, setAllocationError] = useState('');
 
+  // P4 lifecycle. `busy` names the in-flight operation so each button can
+  // disable itself individually rather than freezing the whole panel.
+  const [busy, setBusy] = useState('');
+  const [lifecycleError, setLifecycleError] = useState('');
+
+  /**
+   * Runs one lifecycle callable and reloads.
+   *
+   * Everything here mutates a trip other people are relying on, so each caller
+   * passes its own confirm() text -- generic "are you sure?" trains people to
+   * click through without reading, which is the opposite of what a destructive
+   * action needs.
+   */
+  const lifecycle = async (op, fn, confirmText, extra = {}) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setBusy(op);
+    setLifecycleError('');
+    try {
+      const result = await callFn(fn, { tripId, adminCode: adminKey, ...extra });
+      await loadData();
+      return result;
+    } catch (err) {
+      console.error(`${fn} failed:`, err);
+      setLifecycleError(err?.message || `Could not ${op}. Try again.`);
+    } finally {
+      setBusy('');
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [tripId]);
@@ -258,6 +287,92 @@ export default function AdminDashboard() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Trip lifecycle (P4). Kept below the allocation controls and visually
+            quieter: these are the operations an organizer reaches for when
+            something went wrong, not the main path. */}
+        <div className="bg-selecta-paper border-2 border-selecta-ink/10 rounded-lg p-6 mb-6">
+          <h3 className="font-display font-bold text-lg text-selecta-ink mb-1">
+            Manage this trip
+          </h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Fixing a mistake, or running the allocation again after a change.
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+            {trip.status === 'collecting' && (
+              <button
+                onClick={() => lifecycle('close submissions', 'closeSubmissions',
+                  'Stop accepting new submissions? Nobody else will be able to submit until you reopen.')}
+                disabled={!!busy}
+                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition text-sm"
+              >
+                {busy === 'close submissions' ? 'Closing…' : 'Close submissions'}
+              </button>
+            )}
+
+            {(trip.status === 'finalized' || trip.status === 'closed') && (
+              <button
+                onClick={() => lifecycle('reopen', 'reopenTrip',
+                  trip.status === 'finalized'
+                    ? 'Reopen this trip? The current results are deleted and everyone can submit again. Their existing submissions are kept.'
+                    : 'Reopen this trip so people can submit again?')}
+                disabled={!!busy}
+                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition text-sm"
+              >
+                {busy === 'reopen' ? 'Reopening…' : 'Reopen trip'}
+              </button>
+            )}
+
+            <button
+              onClick={async () => {
+                const result = await lifecycle('delete', 'deleteTrip',
+                  `Permanently delete "${trip.name}"? This removes the trip, every ` +
+                  `submission, the results, and the access codes. It cannot be undone.`);
+                if (result?.success) navigate('/');
+              }}
+              disabled={!!busy}
+              className="px-4 py-2 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 transition text-sm"
+            >
+              {busy === 'delete' ? 'Deleting…' : 'Delete trip'}
+            </button>
+          </div>
+
+          {lifecycleError && (
+            <p className="text-sm text-red-600 mt-3">{lifecycleError}</p>
+          )}
+
+          {submissions.length > 0 && (
+            <div className="mt-5 pt-5 border-t border-selecta-ink/10">
+              <p className="text-sm font-medium text-selecta-ink mb-2">
+                Remove a submission
+              </p>
+              <p className="text-sm text-gray-600 mb-3">
+                For a duplicate, a mistake, or someone who dropped out. If they
+                were named as someone's partner, that pairing is cleared too.
+              </p>
+              <div className="space-y-2">
+                {submissions.map((sub) => (
+                  <div
+                    key={sub.email}
+                    className="flex items-center justify-between gap-3 bg-gray-50 rounded-lg px-3 py-2"
+                  >
+                    <span className="text-sm text-gray-800 truncate">{sub.email}</span>
+                    <button
+                      onClick={() => lifecycle(`remove ${sub.email}`, 'removeSubmission',
+                        `Remove ${sub.email}'s submission? They can submit again if the trip is open.`,
+                        { email: sub.email })}
+                      disabled={!!busy}
+                      className="text-sm text-red-700 hover:text-red-900 disabled:opacity-50 shrink-0"
+                    >
+                      {busy === `remove ${sub.email}` ? 'Removing…' : 'Remove'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Allocation Section */}

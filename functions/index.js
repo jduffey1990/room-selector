@@ -510,3 +510,186 @@ exports.purgeExpiredTrips = onSchedule({
   console.log(`[retention] done. ${armed ? "deleted" : "would delete"} ` +
       `${expired.length} trip(s).`);
 });
+
+// ---------------------------------------------------------------------------
+// P4 — trip lifecycle. All admin-code-gated via requireAdmin, which throws
+// permission-denied for a participant code because it compares against
+// codes.adminCode specifically. That is the "none of these work with a
+// participant code" acceptance criterion, enforced in one place rather than
+// re-implemented five times.
+// ---------------------------------------------------------------------------
+
+/**
+ * Edits trip details and beds, but only while no submissions exist.
+ *
+ * The restriction is not fussiness: people rank beds by name and adjust prices
+ * against a specific bed list. Changing that list underneath a submitted
+ * ballot would silently reinterpret what someone agreed to, and the allocation
+ * would be envy-free over a question nobody was asked.
+ */
+exports.updateTrip = onCall(opts, async (request) => {
+  const {tripId, adminCode, name, totalTripCost, rooms} = request.data || {};
+  await requireAdmin(tripId, adminCode);
+
+  const subs = await db.collection("submissions")
+      .where("tripId", "==", tripId).limit(1).get();
+  if (!subs.empty) {
+    throw new HttpsError("failed-precondition",
+        "Someone has already submitted. Remove their submission first, or " +
+        "reopen the trip after allocating.");
+  }
+
+  const tripRef = db.collection("trips").doc(tripId);
+  const updates = {};
+  if (typeof name === "string" && name.trim()) {
+    updates.name = name.trim().slice(0, 120);
+  }
+  if (totalTripCost !== undefined) {
+    updates.totalTripCost = Number(totalTripCost) || 0;
+  }
+  if (Object.keys(updates).length) await tripRef.update(updates);
+
+  // Rooms are replaced wholesale rather than diffed. A partial update would
+  // need stable ids the client does not own, and with no submissions in play
+  // there is nothing referencing the old room documents.
+  if (Array.isArray(rooms)) {
+    if (rooms.length === 0) {
+      throw new HttpsError("invalid-argument", "At least one room required");
+    }
+    if (rooms.length > 50) {
+      throw new HttpsError("invalid-argument", "Too many rooms (max 50)");
+    }
+    if (rooms.some((r) => !r || typeof r.name !== "string" || !r.name.trim())) {
+      throw new HttpsError("invalid-argument", "Every room needs a name");
+    }
+    const existing = await db.collection("rooms")
+        .where("tripId", "==", tripId).get();
+    const batch = db.batch();
+    existing.docs.forEach((d) => batch.delete(d.ref));
+    for (const room of rooms) {
+      batch.set(db.collection("rooms").doc(), {
+        tripId,
+        name: String(room.name).trim().slice(0, 120),
+        description: String(room.description || "").slice(0, 300),
+        basePrice: Number(room.basePrice) || 0,
+        capacity: Math.max(1, parseInt(room.capacity, 10) || 1),
+        type: String(room.type || "other"),
+      });
+    }
+    await batch.commit();
+  }
+
+  return {success: true};
+});
+
+/**
+ * Stops accepting submissions without running the allocation.
+ *
+ * The organizer needs a way to say "that's everyone" before they are ready to
+ * allocate -- otherwise a late submission can land between reviewing the
+ * roster and pressing the button, and the result they saw is not the result
+ * they get.
+ */
+exports.closeSubmissions = onCall(opts, async (request) => {
+  const {tripId, adminCode} = request.data || {};
+  await requireAdmin(tripId, adminCode);
+
+  const tripRef = db.collection("trips").doc(tripId);
+  const snap = await tripRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Trip not found");
+  if (snap.data().status === "finalized") {
+    throw new HttpsError("failed-precondition",
+        "This trip is already finalized. Reopen it first.");
+  }
+
+  await tripRef.update({status: "closed"});
+  return {success: true, status: "closed"};
+});
+
+/**
+ * Removes one submission -- a duplicate, a mistake, or someone who dropped out.
+ *
+ * Also clears any OTHER submission's partnerEmail pointing at the removed
+ * person. Leaving it would strand a half-declared couple: the survivor still
+ * names a partner who no longer exists, and mutual confirmation can never
+ * complete. They would be silently allocated as a single without being told
+ * their bed-sharing declaration had lapsed.
+ */
+exports.removeSubmission = onCall(opts, async (request) => {
+  const {tripId, adminCode, email} = request.data || {};
+  await requireAdmin(tripId, adminCode);
+
+  const target = String(email || "").toLowerCase().trim();
+  if (!target) throw new HttpsError("invalid-argument", "Email required");
+
+  const snap = await db.collection("submissions")
+      .where("tripId", "==", tripId)
+      .where("email", "==", target).get();
+  if (snap.empty) {
+    throw new HttpsError("not-found", "No submission from that address");
+  }
+
+  const orphaned = await db.collection("submissions")
+      .where("tripId", "==", tripId)
+      .where("partnerEmail", "==", target).get();
+
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  orphaned.docs.forEach((d) => batch.update(d.ref, {partnerEmail: null}));
+  await batch.commit();
+
+  return {
+    success: true,
+    removed: snap.size,
+    partnerRefsCleared: orphaned.size,
+  };
+});
+
+/**
+ * Reopens a finalized trip so it can be allocated again.
+ *
+ * Deletes the assignments rather than leaving them alongside a collecting
+ * trip: getResults would otherwise serve a stale allocation that no longer
+ * matches the submissions, and someone reading their old price would have no
+ * way to tell it was superseded.
+ *
+ * Submissions are deliberately KEPT. Reopening is for rerunning after a
+ * change -- a removed duplicate, a corrected bed list -- not for starting over.
+ */
+exports.reopenTrip = onCall(opts, async (request) => {
+  const {tripId, adminCode} = request.data || {};
+  await requireAdmin(tripId, adminCode);
+
+  const tripRef = db.collection("trips").doc(tripId);
+  const snap = await tripRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Trip not found");
+
+  const assigns = await db.collection("assignments")
+      .where("tripId", "==", tripId).get();
+  const batch = db.batch();
+  assigns.docs.forEach((d) => batch.delete(d.ref));
+  batch.update(tripRef, {status: "collecting"});
+  await batch.commit();
+
+  return {success: true, assignmentsDeleted: assigns.size, status: "collecting"};
+});
+
+/**
+ * Deletes a trip and everything attached to it.
+ *
+ * Uses the same cascade module as the retention cron and seed --clean, so
+ * there is one definition of what "everything" means. Irreversible; the
+ * dashboard confirms before calling.
+ */
+exports.deleteTrip = onCall(opts, async (request) => {
+  const {tripId, adminCode} = request.data || {};
+  await requireAdmin(tripId, adminCode);
+
+  const tripRef = db.collection("trips").doc(tripId);
+  if (!(await tripRef.get()).exists) {
+    throw new HttpsError("not-found", "Trip not found");
+  }
+
+  const counts = await cascade.deleteTripCascade(db, tripRef);
+  return {success: true, deleted: counts};
+});
