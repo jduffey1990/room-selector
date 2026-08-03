@@ -305,7 +305,12 @@ export default function SubmissionForm() {
   }
 
   return (
-    <div className="min-h-screen bg-selecta-cream py-8 px-4">
+    // data-ad-free: bid controls and price adjustments. P2.2 forbids ad markup
+    // in money or fairness UI. src/ads.js already refuses to load AdSense on
+    // this route; this marker is the assertion target for
+    // verify/ads-placement.mjs and the CSS selector to paste into AdSense's
+    // "Excluded areas" as a second, account-side layer.
+    <div className="min-h-screen bg-selecta-cream py-8 px-4" data-ad-free="submission">
       <div className="max-w-4xl mx-auto">
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">
           <h1 className="font-display text-3xl font-bold text-selecta-ink mb-2">{trip.name}</h1>

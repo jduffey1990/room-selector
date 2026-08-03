@@ -253,7 +253,8 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-selecta-cream py-8 px-4">
+    // data-ad-free: price balance and the allocation trigger. See src/ads.js.
+    <div className="min-h-screen bg-selecta-cream py-8 px-4" data-ad-free="admin">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="bg-selecta-paper rounded-lg shadow-selecta border-2 border-selecta-ink/10 p-6 mb-6">

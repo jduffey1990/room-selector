@@ -138,7 +138,9 @@ export default function ResultsView() {
   }
 
   return (
-    <div className="min-h-screen bg-selecta-cream py-8 px-4">
+    // data-ad-free: assignments and the exact dollar figure each person owes.
+    // Nothing goes between a person and the number they pay. See src/ads.js.
+    <div className="min-h-screen bg-selecta-cream py-8 px-4" data-ad-free="results">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="bg-selecta-paper rounded-2xl shadow-selecta border-2 border-selecta-ink/10 p-8 mb-6">

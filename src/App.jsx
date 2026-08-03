@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import HomePage from './components/HomePage';
 import TripCreator from './components/TripCreator';
 import TripJoin from './components/TripJoin';
@@ -10,6 +10,18 @@ import SelectaBot, { BotLoading } from './components/SelectaBot';
 import Footer from './components/Footer';
 import { PrivacyPolicy, Terms } from './components/LegalPages';
 import { isReturningFromLink, completeSignIn } from './auth';
+import { syncAds } from './ads';
+
+// Loads (or refuses to load) AdSense per route. Renders nothing -- the whole
+// job is deciding whether ad code is allowed to exist on the current page.
+// See src/ads.js for why this, rather than account settings, is the guarantee.
+function AdsGate() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    syncAds(pathname);
+  }, [pathname]);
+  return null;
+}
 
 function App() {
   // Firebase appends its parameters to the site root, so a returning
@@ -92,6 +104,7 @@ function App() {
       {/* Outside <Routes> so the legal links are reachable from every page --
           both a legal requirement and an AdSense approval requirement. */}
       <Footer />
+      <AdsGate />
     </Router>
   );
 }
