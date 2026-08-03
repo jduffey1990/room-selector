@@ -86,11 +86,11 @@ limits. Do not restate that content here.
 | Thing | Status |
 | --- | --- |
 | The app | **Deployed** — https://room-selector.web.app and https://www.roomselector5000.com (both certs valid; apex 301s to `www`) |
-| `firestore.rules` (deny-by-default), **seven** callables, hosting from `dist/` | **Deployed**, verified end to end in production |
+| `firestore.rules` (deny-by-default), callables, hosting from `dist/` | **12 callables deployed** + the `purgeExpiredTrips` schedule, verified end to end in production. **A 13th, `listParticipantNames` (P5.2), is committed but NOT deployed.** (This row said "seven" until 2026-08-03 — it had never been updated for P4's five admin callables. Count with `grep -c "onCall(" functions/index.js` rather than trusting prose.) |
 | `allocateRooms` | **Envy-free allocator**, proven in production on a discriminating input (2026-07-28) |
-| Couples | Mutual `partnerEmail` confirmation. The `+copy` hack no longer forms couples. |
+| Couples | Mutual confirmation, **selected by name since P5.2 — a participant never types an email address.** `partnerEmail` remains the stored field and the only one allocation and the auditor read; it is now *derived* by `functions/couples.js` from a dropdown pick or a typed name claim. The `+copy` hack no longer forms couples. |
 | Design system | Selecta-bot (cream/teal/coral, bot states), all six views verified at 390px, dark mode, zero console errors |
-| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/ads-placement.mjs` (P2.2 negative), `verify/p4-lifecycle.mjs` (edit form + reopen→re-allocate), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/envy-audit.cjs` (the shared independent envy check), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack") |
+| Test harnesses | `verify/e2e-napa-flow.mjs` (production e2e; `--discriminating` proves which allocator is live), `verify/ads-placement.mjs` (P2.2 negative), `verify/p4-lifecycle.mjs` (edit form + reopen→re-allocate), `verify/regression-envyfree.cjs` (18/18 vs reference), `verify/simulate-envyfree.cjs` (576 trips, zero envy — results in `verify/simulation-results.md`), `verify/envy-audit.cjs` (the shared independent envy check), `verify/preview-results-email.cjs` (email rendering; `--send` posts one real message), `verify/local-auth-enforcement.mjs` + `verify/local-magiclink-flow.mjs` (emulator-only; see README "Local stack"), and the P5 set: `verify/p5-couples.cjs` (pairing logic, no browser), `verify/p5-ranking.mjs`, `verify/p5-guidance.mjs`, `verify/p5-partner-ui.mjs`. **`local-auth-enforcement` and `local-magiclink-flow` are currently RED and were before P5** — see "Known red" below. |
 | Firebase Auth | **Enabled 2026-08-03** (owner, via Cloud Shell — see P1.1). Email/Password + passwordless on; both `roomselector5000.com` hostnames in `authorizedDomains`. Legacy Firebase Auth, not Identity Platform. |
 | Email | **DEPLOYED 2026-08-03.** Magic-link verification enforced (`submitPreferences` returns 401 to an unauthenticated `curl`, verified in production), results email sends at finalization. Auth email goes via Brevo from `noreply@roomselector5000.com` and **lands in the inbox** — P1.4 resolved. |
 | Listing import | **DEPLOYED 2026-08-03.** `extractListing` (7th callable) on `claude-haiku-4-5`, ~$0.0026/call. Verified end to end in production: pasted listing → populated create form, 3.3s mobile / 4.8s desktop, zero console errors. |
@@ -98,7 +98,7 @@ limits. Do not restate that content here.
 | Trip dates | **Collected 2026-08-03** (optional `startDate`/`endDate`, YYYY-MM-DD strings on the trip doc). |
 | Retention (P3) | **Cron deployed, DRY RUN.** `purgeExpiredTrips`, monthly 09:00 UTC on the 1st. Deletes nothing until `RETENTION_ENABLED=true`. Cascade extracted to `functions/trip-cascade.js` and shared with `seed --clean`. |
 | Privacy policy + terms | **DEPLOYED 2026-08-03** (P2.1). `/#/privacy` and `/#/terms`, linked from a footer on every route. **Two open obligations: `privacy@roomselector5000.com` must route to a real inbox, and the policy promises 6-month deletion that P3 has not implemented yet.** |
-| App Check | **ENFORCED 2026-08-03** (P2.3) on six of seven callables via classic reCAPTCHA v3. `getResults` deliberately open — it is opened from the results email, often days later in a mail client's in-app browser where reCAPTCHA scores poorly, and blocking someone from seeing what they owe is worse than a scraper reading an already-shared page. Raw `curl` → 401 on the six, 400 on `getResults`. **The e2e harness needs `APPCHECK_DEBUG_TOKEN` (registered debug token, never committed) or every submission is rejected.** |
+| App Check | **ENFORCED 2026-08-03** (P2.3) on every callable except `getResults`, via classic reCAPTCHA v3 — `listParticipantNames` included, from its first deploy. `getResults` deliberately open — it is opened from the results email, often days later in a mail client's in-app browser where reCAPTCHA scores poorly, and blocking someone from seeing what they owe is worse than a scraper reading an already-shared page. Raw `curl` → 401 on the six, 400 on `getResults`. **The e2e harness needs `APPCHECK_DEBUG_TOKEN` (registered debug token, never committed) or every submission is rejected.** |
 | Ads | **Code shipped 2026-08-03 (P2.2).** Verification meta tag + `public/ads.txt` live; `src/ads.js` allowlists the AdSense loader to `/`, `/create`, `/join`, `/privacy`, `/terms`. Money and fairness UI never loads ad code — proven by `verify/ads-placement.mjs`, 39/39. **No ads serve yet:** the site is still "needs review", and the Auto ads format toggles are AdSense-UI only (owner). See `docs/drafts/P2.2-adsense-settings.md`. |
 
 Deploy note: **rules, functions, and client must deploy together**
@@ -123,7 +123,89 @@ Production failure modes already hit, worth remembering:
   first-run dialog breaks it harder: the harness opens a **fresh browser
   context per participant**, so `localStorage` is always empty and the dialog
   is always up. Update the harness in the same commit as the UI, and prefer
-  `data-testid` over copy for anything P5 adds.
+  `data-testid` over copy for anything P5 adds. **Done as of `29233f2`** — the
+  partner field is now `[data-testid="partner-select"]`, the name field
+  `[data-testid="display-name"]`, and the first-run dialog is marked seen via
+  `addInitScript` in every harness that drives the form.
+- **A first-run modal breaks every harness that opens a fresh context**, which
+  is all of them, because Playwright storage starts empty each time. Symptom
+  is a click timing out on a control that is plainly visible in a screenshot —
+  the overlay is on top of it. Set the localStorage key in `addInitScript`
+  rather than clicking the dialog away per page.
+
+### Shipped (2026-08-03, third session) — P5 complete, NOT DEPLOYED
+
+All four P5 items are built, committed and verified locally. **Nothing is
+deployed** — the owner holds that call, and their own trip is the first real
+use of this. Deploy is `npm run build && firebase deploy --only
+firestore,functions,hosting`, all three together.
+
+| Item | Commit | Verified |
+| --- | --- | --- |
+| 5.1 import copy, URL guard, `importNotes` | `f1acdb8` | 8/8 URL discrimination |
+| 5.4 drag to rank | `56132b2` | 23/23 at 390px + desktop |
+| 5.3 explainer + tooltips + scenes | `d57334d` | 30/30 at 390px + desktop |
+| 5.2 pairing, server | `c076269` | 30/30 pairing logic |
+| 5.2 pairing, client | `29233f2` | 21/21 partner UI |
+
+**The design's central claim held, and this is the evidence:**
+`verify/regression-envyfree.cjs` still passes 18/18 against the reference
+implementation, **completely unmodified**. Pairing changed shape on the wire
+(names and opaque ids) and did not change in storage (`partnerEmail`), so
+`functions/allocation.js` and `verify/envy-audit.cjs` never had to move. If a
+future change makes either of those files need edits to support pairing, that
+is the signal the invariant has been broken.
+
+Worth not relearning:
+
+- **`setPointerCapture` delivered `pointerdown` and then no moves at all**, so
+  every drag ended where it started. There is no error, and a no-op reorder is
+  indistinguishable from a deliberate one. Window listeners are the fix, and
+  they also handle the real-world case: a thumb sliding off a 28px grip.
+- **A Playwright `boundingBox()` can be negative.** Ranking four beds scrolls
+  the page, leaving the panel above the fold; `page.mouse` then dispatches at
+  coordinates outside the viewport and every event lands on `<html>`. The
+  component looked broken and was not. Call `scrollIntoViewIfNeeded()` before
+  measuring, and throw on a negative y so it fails loudly.
+- **A harness that chains expectations reports one bug twice.** The ranking
+  checks originally asserted against what an earlier step was *supposed* to
+  produce, so a single drag failure also failed the keyboard path. Each check
+  now derives its expectation from the order observed immediately before it
+  acts.
+- **`shrink-0` in a flex row is a horizontal-scroll bug waiting for a long
+  string.** The "How this works" button pushed 40px past the viewport at 390px
+  with a real trip name. The `<h1>` had wrapped fine on its own. Any new flex
+  header needs the overflow assertion, which is one line:
+  `document.documentElement.scrollWidth - clientWidth`.
+- **The App Check debug token must never be a `VITE_` variable.** Vite inlines
+  `VITE_*` into the production bundle at build time, and a debug token in
+  shipped JS is an App Check bypass for anyone who reads it. Unprefixed in
+  `.env.local` (gitignored), read in Node and injected by the harness. Proven
+  absent from `dist/` after a build — repeat that check if the mechanism
+  changes.
+- **Do not widen a console-error allowlist to make a run green.** The App
+  Check 403 was a genuine failure (headless reCAPTCHA), and the fix was
+  registering a debug token. "Failed to load resource: 403" is also exactly
+  what a broken callable prints, so a text-match filter on it would have
+  swallowed the class of bug that gate exists to catch.
+
+### Known red (pre-existing, not caused by P5)
+
+`verify/local-auth-enforcement.mjs` (2 checks) and
+`verify/local-magiclink-flow.mjs` (times out) both fail at the same place:
+**`submitPreferences` returns 401 to a caller that is authenticated.**
+
+This predates P5, provably: `local-auth-enforcement` is a raw HTTP call
+against a function P5 never modified (`submitPreferences` appears zero times
+in `f1acdb8`'s diff) and involves no client code at all.
+
+Cause unconfirmed. The likely story is that P2.3's `enforceAppCheck: true`
+landed after these emulator harnesses were written and neither sends an App
+Check token — but the functions emulator logs no App Check rejection, and the
+handler executes before returning 401, which does not fit cleanly. **First
+thing to try: give both harnesses the registered debug token**, the way
+`p5-*.mjs` now do. Their payloads were already updated for P5.2's required
+`displayName`, so they are otherwise current.
 
 ### Shipped (2026-08-03, second session) — do not redo
 
@@ -192,7 +274,7 @@ custom-domain certs live. Proofs live in `verify/`; theory in
   containing `adminCode`, `participantCode`, or an email address. Firestore cannot
   filter fields on a read, which is why trip codes live in `trips/{id}/secret/codes`.
   Add an explicit deny block rather than loosening an existing rule.
-  - P5.2 adds one bounded exception, and it is bounded on purpose:
+  - **One bounded exception, shipped in P5.2 and bounded on purpose:**
     `submissions` stays unreadable by rules, and **`listParticipantNames` is
     the only callable that returns anything derived from it to a non-admin.**
     It returns display names and opaque submission ids — never an address. The
@@ -200,6 +282,10 @@ custom-domain certs live. Proofs live in `verify/`; theory in
     (`j••••y@gmail.com`), shown only when two display names on one trip
     collide. If a change would put a full address in that response, the change
     is wrong.
+    - **This is enforced, not just documented.**
+      `verify/p5-partner-ui.mjs` seeds submissions with known addresses and
+      asserts none of them appear anywhere in the page source. Keep that check
+      alive; it is what turns the invariant from a comment into a test.
 - **Lint gates deploy.** `firebase.json` runs `npm --prefix functions run lint` as a
   `predeploy` hook.
 - **Commits** explain *why*, not just what. Include measured results when a change is
@@ -214,7 +300,13 @@ custom-domain certs live. Proofs live in `verify/`; theory in
 
 ---
 
-## Roadmap — next pass
+## Roadmap — all shipped, kept for the reasoning
+
+**Every item below is built.** P0–P4 are deployed; P5 is committed and awaiting
+the owner's deploy (see "Start here"). These sections stay because they record
+*why* each thing is the way it is — the constraints, the rejected options, and
+the measurements behind the decisions. Read before changing any of it; do not
+re-implement any of it.
 
 ### P0 — Listing import (owner-requested 2026-08-03; promoted from "Later")
 
@@ -588,223 +680,14 @@ callables plus dashboard UI:
 > Shipped below). The figures above are from a run reproduced after that
 > fix.
 
-### P5 — The first-timer's pass (owner-requested 2026-08-03, third session)
-
-Everything through P4 makes the mechanism *correct*. P5 is about whether a
-person who has never seen this product can drive it. Four places in the
-create → join → submit journey leave someone guessing or make them work too
-hard to say a simple thing, and that is expensive here in a specific way: a
-person who misunderstands the form submits a ballot that does not say what
-they meant, and **the allocator then fairly allocates fiction**. Envy-freeness
-over a misunderstood ballot is worth nothing, and — like every other bug in
-this repo — it fails silently.
-
-None of these is a crash. Every one of them returns HTTP 200.
-
-5.1–5.3 were the owner's original three; **5.4 (drag-rank) was promoted out of
-"Later" in the same session**, because it is the same problem seen from the
-other end — not "why is this confusing" but "why is this so much work to say."
-
-**P5 is deliberately UI-only.** The AI ranking assist was specced alongside
-5.4 and then **re-parked the same day (owner, 2026-08-03)** so that nothing
-here waits on an API key. Its design, its data-dependency finding, and its
-key decision are kept intact under "Later" — read them there before rebuilding
-any of it. The one server-side piece left in P5 is 5.2's
-`listParticipantNames`, which needs no external service.
-
-**5.1 Listing import: say what to paste.**
-
-The panel copy today is "Upload the listing or paste its text"
-([src/components/TripCreator.jsx:291](src/components/TripCreator.jsx#L291)).
-It never says *which* text, never states the size or format limits until
-after a failure, and never says that a URL does nothing.
-
-- Explicit, numbered instruction: open the listing, select the whole page
-  **including the sleeping-arrangement / bedroom section and the price
-  breakdown**, paste it. The bedroom section is the part the extraction
-  actually needs and the part a person is least likely to include.
-- State accepted formats and the 3 MB cap **up front**, not only in the error
-  path. `MAX_UPLOAD_BYTES` and `ACCEPTED_UPLOADS` already exist at
-  [TripCreator.jsx:8-9](src/components/TripCreator.jsx#L8-L9) — render from
-  them, do not restate the numbers in copy that can drift.
-- **Refuse a bare URL client-side**, plainly: Selecta-bot cannot open links —
-  paste the page's text or upload a screenshot. This is the likeliest first
-  attempt (the product is deliberately paste-not-scrape, see P0) and today it
-  spends an API call to return nothing useful. Catching it in the browser is
-  free and the message is the only place a user learns the constraint.
-- Voice: this is instruction copy about a thing that costs money, so it is
-  literal. Retro flourish stays in the panel heading.
-- **Persist the extraction notes — DECIDED 2026-08-03 (owner).**
-  `extractListing` returns `notes` (what the model could not work out) and
-  [TripCreator.jsx:61](src/components/TripCreator.jsx#L61) renders it in the
-  amber panel, but `createTrip` is never sent it, so it **dies at submit**.
-  "The listing said sleeps 12, I only found 10 beds" is visible for exactly
-  one screen and then gone — including from the organizer, who is the person
-  most likely to want it a week later when someone asks where the eleventh
-  bed is. Keep it.
-  - Store it as **`importNotes` on the trip document**, capped like every
-    other string field. That is the right home for three reasons: it describes
-    the *property*, not any person; P3 retention already cascades the trip
-    doc, so it inherits the 6-month rule for free instead of needing a new
-    one; and `updateTrip` already owns that document.
-  - **Compatible with the security invariant, and worth stating why:**
-    `trips/{id}` is world-readable, and `importNotes` holds no email, no code,
-    and nothing about a participant — only what a listing did or didn't say.
-    No `firestore.rules` change. **Render it in the admin dashboard only** —
-    it is organizer context, and a participant reading "the model wasn't sure
-    about bed 7" gains nothing and may distrust a bed list the organizer has
-    already corrected.
-  - **`updateTrip` must clear it when the bed list changes.** The note
-    describes an extraction, not the current beds; once the organizer edits
-    them it can be actively wrong, and a stale warning is worse than none.
-  - No P2.1 privacy-policy change expected: the policy enumerates *personal*
-    data and this is property metadata. Re-read the wording when implementing
-    rather than assuming it still reads true.
-
-> **Acceptance:** a first-time organizer who pastes an Airbnb URL is told why
-> that cannot work and what to do instead, without an API call; the formats
-> and size cap are readable before choosing a file; a pasted listing that
-> includes the bedroom section fills the bed list.
-
-**5.2 Partner selection by name, never by email.**
-
-Today [SubmissionForm.jsx:370](src/components/SubmissionForm.jsx#L370) takes
-`partnerEmail` as free text, and a couple forms only on *exact mutual* match
-([functions/allocation.js:123-129](functions/allocation.js#L123-L129)). Two
-ways that fails, both silent, both ending as two singles with nobody informed:
-a typo, or — the one the owner hit — being named as `jordan@gmail.com` by
-someone who then verifies under `jduffey@gmail.com`. Edit-distance repair
-cannot bridge that second case; the addresses are not near each other.
-
-**Decided 2026-08-03: a human never types an email address in the pairing
-flow at all.** Your own address comes from the verified magic-link token and
-is correct by construction. Your partner's comes from a server-side
-dereference of an opaque id — never from your memory of how they spell it.
-This deletes the entire failure class rather than repairing instances of it.
-
-- `submissions` gains **`displayName`** (required, ≤40 chars, e.g. "Jordan
-  D."), collected beside the email field.
-- New callable **`listParticipantNames(tripId)`** → `[{submissionId,
-  displayName}]` and **no email addresses, ever**. App Check enforced like
-  the other six; it is reachable from the trip page, which is not `getResults`
-  and has no mail-client excuse.
-- The partner control becomes a **name dropdown**, plus an escape hatch for
-  "they haven't submitted yet".
-- **`submitPreferences` resolves `partnerSubmissionId` → `partnerEmail`
-  server-side and stores `partnerEmail` exactly as it does today.** This is
-  the load-bearing decision. `computeAllocation`
-  ([allocation.js:114-129](functions/allocation.js#L114-L129)),
-  `removeSubmission`'s `where("partnerEmail","==",target)`
-  ([functions/index.js:634](functions/index.js#L634)), and
-  [verify/envy-audit.cjs:53-55](verify/envy-audit.cjs#L53-L55) all key on that
-  field. Changing the wire format while leaving the stored field untouched
-  means **zero changes to the allocator or the auditor** — and the auditor is
-  precisely the code that once manufactured a phantom envy violation by
-  modelling couples differently from the product.
-- **The ordering problem is the whole difficulty, so state it:** the dropdown
-  can only list people who have *already* submitted.
-  - Partner already submitted → pick them. Exact, instant, unspoofable.
-  - Partner has not → type their **name** as a pending claim. A name, not an
-    address: a wrong name is recoverable by a human reading it, a wrong
-    address is not.
-  - Mutual confirmation survives, because the *later* side is always the
-    exact one. One fuzzy claim plus one dropdown pick is a confirmed pair;
-    a fuzzy claim alone is not, exactly as today.
-  - Anything still unresolved surfaces in the admin dashboard as a **Couples
-    panel** (confirmed pairs / unresolved claims), and `allocateRooms` warns
-    before finalizing. The organizer already reads every address via
-    `getAdminData`, so they are the only party who can reconcile a mismatch —
-    and today they are never told there is one.
-- **Name collisions — decided 2026-08-03:** when two display names on a trip
-  collide, and only then, disambiguate with a masked address
-  (`j••••y@gmail.com`). A deliberate, bounded leak to a person's own
-  trip-mates, preferable to a pairing they cannot tell apart. It is a
-  decision, not a detail: it is the one place an address fragment reaches a
-  non-admin client.
-- **Legacy submissions have no `displayName`** — fall back to a masked
-  local-part. Cheap now (`submissions` holds only `[demo]` fixtures after the
-  owner's cleanup) and it must be written down, because discovering it later
-  looks like a broken dashboard.
-
-> **Acceptance:** two people who have never exchanged email addresses form a
-> confirmed couple; a participant named before they submit can still resolve
-> the pairing from their side; an unresolved claim is visible to the organizer
-> *before* allocation rather than discoverable only in the results; no
-> response to a non-admin client contains a full email address.
-
-**5.3 Explain the mechanism where it is used.**
-
-The balance bar ([SubmissionForm.jsx:325](src/components/SubmissionForm.jsx#L325))
-says "Needs adjustment: +$50" and never says why adjustments must sum to zero.
-"+ Show Price Adjustment" is a collapsed disclosure with no explanation behind
-it. Envy-freeness is the product, and the page that depends on people
-understanding it explains it nowhere.
-
-- New `src/components/Tooltip.jsx` — nothing like it exists today. **Focus-
-  and tap-driven, not hover-only**; 390px is a first-class target and a
-  hover tooltip is invisible on the device most people will use.
-- New **`src/components/SelectaBotScene.jsx`**, kept *separate* from
-  [SelectaBot.jsx](src/components/SelectaBot.jsx). Reason: the existing
-  component is a verified head-and-shoulders bust with a four-value `state`
-  prop; giving it arms means a new `viewBox` and re-verifying every screen
-  that renders it. Three scenes — balance scale (zero-sum), ranked list
-  (preferences), paired beds (partners).
-- A dismissible **"How this works"** dialog on first visit to the submission
-  form, remembered in `localStorage` (same mechanism as
-  [src/auth.js:37](src/auth.js#L37)), and **reopenable from a persistent
-  button** — an explanation that can be dismissed forever is an explanation
-  the second-guessing user cannot get back.
-- Inline tooltips on the three controls that carry the mechanism: the balance
-  bar, the ranking buttons, the ±$25 stepper.
-- Voice: the dialog explains *why adjustments sum to zero* and *why ranking
-  honestly is the right move*, restated from `ARCHITECTURE.md` rather than
-  re-derived. **It must not coach anyone toward a winning bid** — the
-  mechanism is not strategyproof (`ARCHITECTURE.md:93-96`), and the
-  never-help-them-win constraint under "Later → AI ranking assist" binds this
-  copy too. It is not only about a future callable: prose that explains how to
-  bid *well* rather than how to bid *honestly* breaks the same property, and
-  this dialog is the most likely place to write it by accident. Helping
-  someone express what they want is the goal; helping them win is not.
-- The dialog and tooltips live inside `data-ad-free="submission"`
-  ([SubmissionForm.jsx:313](src/components/SubmissionForm.jsx#L313)). P2.2
-  forbids ad markup in money or fairness UI and new UI does not get an
-  exemption.
-
-> **Acceptance:** a first-time participant can state, unprompted, why the
-> adjustments must sum to zero; the explanation is reachable again after
-> dismissal; tooltips open by tap at 390px; zero console errors, dark mode.
-
-**5.4 Drag to rank.**
-
-Ranking today is a "Ranked #3" button plus up/down chevrons
-([SubmissionForm.jsx:426-443](src/components/SubmissionForm.jsx#L426-L443)) —
-one tap per position, per bed. With six beds that is a lot of tapping to say
-something simple, and the current position is only legible by reading a number
-off a button. Promoted here from "Later" because it is the same problem as the
-rest of P5: the ballot should be easy to make say what the person means.
-
-- Drag to reorder the ranked list, with the chevrons **kept** as a fallback.
-  Not decoration: drag is unreliable with assistive tech and fiddly at 390px
-  with a thumb, and the harness drives the buttons.
-- No API, no key, no server change. This is the one P5 item with no external
-  dependency — it can ship on its own.
-- **Keep the exact button strings** `Add to Preferences` and `Ranked #N`, or
-  update `verify/e2e-napa-flow.mjs` in the same commit. See the harness note
-  under "Production failure modes".
-
-> **Acceptance:** a six-bed ballot can be fully ordered by dragging; the
-> chevrons still work and still carry the same labels; keyboard reordering
-> works; zero console errors at 390px and desktop, dark mode.
-
----
-
 ## Later (parked — constraints still bind)
 
 - ~~**Listing import.**~~ **Promoted 2026-08-03 — now P0.** The
   ad-vignette-before-the-AI-call idea stays parked with P2.2 (needs the
   owner's AdSense account).
-- ~~**Drag-rank**~~ **promoted 2026-08-03 — now P5.4.** It needed no key and
-  no callable, so it went with the rest of the first-timer's pass.
+- ~~**Drag-rank**~~ **BUILT 2026-08-03** as P5.4 (`56132b2`). It needed no key
+  and no callable, so it went with the rest of the first-timer's pass. See
+  `src/components/RankedList.jsx` and `verify/p5-ranking.mjs`.
 
 - **AI ranking assist — specced 2026-08-03, then deliberately re-parked the
   same day (owner).** Not blocked, not abandoned: descoped so P5 stays UI-only
@@ -893,26 +776,35 @@ being asked. A session isn't finished until its hand-off is.
 
 ## Start here (autonomous session)
 
-**P0–P4 are shipped as of 2026-08-03.** P4 is complete and P2.2's code half is
-done and verified.
+**P0–P5 are built as of 2026-08-03.** The roadmap is empty. What remains is
+one repo task and a set of owner decisions.
 
-**The code work now is P5 — the first-timer's pass**, specced in the roadmap
-above during the third session on 2026-08-03 and **not started**. It is UI
-plus one new callable, not mechanism: the allocator, the auditor, and the
-stored `partnerEmail` shape are all deliberately untouched by it. **Nothing in
-P5 waits on an owner action or an external service** — that is why the AI
-ranking assist was re-parked rather than kept in.
+**THE ONE THING TO DO FIRST: P5 is committed but NOT DEPLOYED.** Five commits
+(`f1acdb8` → `29233f2`) sit on `main`, unpushed and unshipped. Production is
+still running the pre-P5 client and functions. Deploying is
+`npm run build && firebase deploy --only firestore,functions,hosting` — all
+three together, never two.
 
-- **Start with P5.4** if you want something that ships today — drag-rank needs
-  no key, no callable, and no owner action.
-- **Read P5.2 before touching the partner flow.** The dropdown-ordering problem
-  is the part that looks simple and is not.
-- **Read the harness note under "Production failure modes"** before touching
-  any copy on the submission form.
-- 5.1 now includes **persisting `importNotes` onto the trip doc** (decided by
-  the owner 2026-08-03). Small, but it touches `createTrip`, `updateTrip`, and
-  the dashboard — and `updateTrip` must *clear* it when beds change, or the
-  organizer keeps reading a warning about a bed list that no longer exists.
+Deploy is the owner's call rather than an unattended one, deliberately: P5.2
+changes the submission form's data contract, the owner's own trip is the first
+real use of it, and two local harnesses are red for reasons nobody has
+confirmed yet (see "Known red"). Sequence when the owner says go:
+
+1. Deploy all three.
+2. `verify/e2e-napa-flow.mjs --discriminating` against a fresh `[demo]` trip.
+   It now exercises **both** pairing paths — a typed name claim and a dropdown
+   pick — so a broken partner flow fails there rather than in the owner's real
+   trip.
+3. Check the couples panel on the admin dashboard shows the pair as confirmed.
+4. Browser check at 390px and desktop, dark, zero console errors.
+
+**Migration note, and it matters:** submissions written before this deploy
+have no `displayName`, `partnerSubmissionId`, or `partnerClaimName`.
+`listParticipantNames` falls back to a masked local part so they stay
+selectable, and `removeSubmission` keeps its old explicit `partnerEmail` clear
+for exactly them. Production `submissions` was empty of orphans as of this
+session, so the blast radius is any trip collected between then and the
+deploy.
 
 Everything else outstanding is owner-blocked, not repo-blocked:
 
@@ -965,8 +857,23 @@ npm --prefix functions run lint    # gates deploy
 node seed/seed-demo-trips.js       # fixtures; --clean first to avoid dupes
 node verify/regression-envyfree.cjs
 node verify/simulate-envyfree.cjs
+node verify/p5-couples.cjs         # pairing logic; no browser, no emulator
 PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
   node verify/e2e-napa-flow.mjs <tripId> <participantCode> <adminCode>
+```
+
+The P5 browser harnesses run against the **emulator**, not production, and
+need the App Check debug token in a gitignored `.env.local` — full setup in
+README "Local stack".
+
+```bash
+firebase emulators:start --only auth,firestore,functions
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node seed/seed-demo-trips.js
+VITE_USE_EMULATOR=true VITE_AUTH_EMULATOR=true npm run dev -- --port 5173
+
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+  PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/p5-ranking.mjs      # and p5-guidance.mjs, p5-partner-ui.mjs
 ```
 
 ---

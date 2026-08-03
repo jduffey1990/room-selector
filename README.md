@@ -69,6 +69,7 @@ ceiling is `maxInstances` on each callable.
 node verify/regression-envyfree.cjs    # port matches the reference, 18/18
 node verify/simulate-envyfree.cjs      # 576 synthetic trips, zero envy
 node verify/preview-results-email.cjs  # renders the results email, offline
+node verify/p5-couples.cjs             # pairing logic, no browser needed
 
 # Extraction quality + cost. --sweep compares models on the same listing.
 ANTHROPIC_API_KEY=$(firebase functions:secrets:access ANTHROPIC_API_KEY) \
@@ -130,7 +131,21 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
   PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
   node verify/p5-ranking.mjs               # drag / keys / buttons reorder
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+  PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/p5-guidance.mjs              # explainer + tooltips, tap not hover
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+  PLAYWRIGHT_BROWSERS_PATH=./node_modules/.cache/ms-playwright \
+  node verify/p5-partner-ui.mjs            # partner dropdown; no address leaks
 ```
+
+**Two of these are currently red, and were before P5** —
+`local-auth-enforcement` (2 checks) and `local-magiclink-flow` (times out).
+Both fail at the same point: `submitPreferences` returns 401 to a caller that
+*is* authenticated. `local-auth-enforcement` is a raw HTTP call against a
+function P5 never modified, so this predates it. Unconfirmed cause; the first
+thing to try is giving both harnesses the App Check debug token, since P2.3
+enforcement landed after they were written.
 
 **App Check debug token.** headless Chromium cannot solve reCAPTCHA, so App
 Check's token exchange returns 403 and any harness asserting zero console
